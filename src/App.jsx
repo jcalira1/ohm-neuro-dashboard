@@ -89,7 +89,7 @@ function Logo({ color = OHM.primary, size = 22 }) {
   )
 }
 
-function Sidebar({ batchId, promptVersion }) {
+function Sidebar({ batchId, promptVersion, open, onClose }) {
   const brand = OHM.primary
   const items = [
     { label: 'Intelligence Feed', active: true,  icon: c => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 3h12M1 7h12M1 11h8" stroke={c} strokeWidth="1.6" strokeLinecap="round"/></svg> },
@@ -99,48 +99,77 @@ function Sidebar({ batchId, promptVersion }) {
   ]
 
   return (
-    <aside style={{ width: 230, flexShrink: 0, background: OHM.paper, borderRight: `1px solid ${OHM.line}`, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <div style={{ padding: '24px 22px 22px', borderBottom: `1px solid ${OHM.lineSoft}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Logo color={brand} size={24}/>
-        <div>
-          <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 16, letterSpacing: 0.5, fontWeight: 500 }}>OHM NEURO</div>
-          <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.muted, marginTop: 2 }}>Intelligence V2</div>
-        </div>
-      </div>
+    <>
+      {/* Overlay — mobile only */}
+      {open && (
+        <div
+          onClick={onClose}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+            zIndex: 40, display: 'block',
+          }}
+        />
+      )}
 
-      <nav style={{ padding: '14px 12px', flex: 1 }}>
-        {items.map(it => {
-          const c = it.active ? brand : OHM.muted
-          return (
-            <div key={it.label} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '9px 12px', borderRadius: 6, marginBottom: 2,
-              background: it.active ? OHM.sage : 'transparent',
-              opacity: it.soon ? 0.55 : 1,
-              cursor: it.soon ? 'default' : 'pointer',
-            }}>
-              <span style={{ color: c, display: 'flex' }}>{it.icon(c)}</span>
-              <span style={{ color: it.active ? OHM.ink : OHM.muted, fontSize: 13, fontWeight: it.active ? 600 : 400, flex: 1 }}>{it.label}</span>
-              {it.soon && <span style={{ fontSize: 9, color: OHM.mutedLt, border: `1px solid ${OHM.line}`, borderRadius: 3, padding: '1px 5px', letterSpacing: 0.6 }}>SOON</span>}
-            </div>
-          )
-        })}
-
-        <div style={{ margin: '22px 12px 10px', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.mutedLt, fontWeight: 600 }}>This week</div>
-        <div style={{ padding: '0 12px', fontSize: 12, color: OHM.muted, lineHeight: 1.6 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Batch</span><span style={{ color: OHM.ink, fontFeatureSettings: '"tnum"' }}>{batchId || '—'}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Prompt</span><span style={{ color: OHM.ink }}>{promptVersion || 'v1.1'}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Source</span><span style={{ color: OHM.ink }}>Supabase</span></div>
+      {/* Sidebar drawer */}
+      <aside style={{
+        width: 230, flexShrink: 0,
+        background: OHM.paper,
+        borderRight: `1px solid ${OHM.line}`,
+        display: 'flex', flexDirection: 'column',
+        minHeight: '100vh',
+        position: open ? 'fixed' : 'relative',
+        top: 0, left: 0, zIndex: 50,
+        transform: open ? 'translateX(0)' : undefined,
+        // On mobile, hide off-screen when closed
+        ...(typeof window !== 'undefined' && window.innerWidth < 768 && !open
+          ? { position: 'fixed', transform: 'translateX(-100%)', top: 0, left: 0, zIndex: 50 }
+          : {}),
+      }}>
+        {/* Brand + close button */}
+        <div style={{ padding: '24px 22px 22px', borderBottom: `1px solid ${OHM.lineSoft}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Logo color={brand} size={24}/>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 16, letterSpacing: 0.5, fontWeight: 500 }}>OHM NEURO</div>
+            <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.muted, marginTop: 2 }}>Intelligence V2</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: OHM.muted, fontSize: 18, lineHeight: 1, padding: 4 }}>✕</button>
         </div>
-      </nav>
 
-      <div style={{ padding: '14px 22px', borderTop: `1px solid ${OHM.lineSoft}`, fontSize: 11, color: OHM.mutedLt }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: OHM.primary }}/>
-          <span>Connected · Supabase</span>
+        <nav style={{ padding: '14px 12px', flex: 1 }}>
+          {items.map(it => {
+            const c = it.active ? brand : OHM.muted
+            return (
+              <div key={it.label} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 12px', borderRadius: 6, marginBottom: 2,
+                background: it.active ? OHM.sage : 'transparent',
+                opacity: it.soon ? 0.55 : 1,
+                cursor: it.soon ? 'default' : 'pointer',
+              }}>
+                <span style={{ color: c, display: 'flex' }}>{it.icon(c)}</span>
+                <span style={{ color: it.active ? OHM.ink : OHM.muted, fontSize: 13, fontWeight: it.active ? 600 : 400, flex: 1 }}>{it.label}</span>
+                {it.soon && <span style={{ fontSize: 9, color: OHM.mutedLt, border: `1px solid ${OHM.line}`, borderRadius: 3, padding: '1px 5px', letterSpacing: 0.6 }}>SOON</span>}
+              </div>
+            )
+          })}
+
+          <div style={{ margin: '22px 12px 10px', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.mutedLt, fontWeight: 600 }}>This week</div>
+          <div style={{ padding: '0 12px', fontSize: 12, color: OHM.muted, lineHeight: 1.6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Batch</span><span style={{ color: OHM.ink, fontFeatureSettings: '"tnum"' }}>{batchId || '—'}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Prompt</span><span style={{ color: OHM.ink }}>{promptVersion || 'v1.1'}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Source</span><span style={{ color: OHM.ink }}>Supabase</span></div>
+          </div>
+        </nav>
+
+        <div style={{ padding: '14px 22px', borderTop: `1px solid ${OHM.lineSoft}`, fontSize: 11, color: OHM.mutedLt }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: OHM.primary }}/>
+            <span>Connected · Supabase</span>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   )
 }
 
@@ -467,6 +496,8 @@ export default function App() {
   const [loading,      setLoading]      = useState(true)
   const [reactedCount, setReactedCount] = useState(0)
   const [grouping,     setGrouping]     = useState('none')
+  const [sidebarOpen,  setSidebarOpen]  = useState(false)
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
   useEffect(() => {
     async function fetchTopics() {
@@ -487,11 +518,47 @@ export default function App() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'Inter, system-ui, sans-serif', background: OHM.paper, color: OHM.ink }}>
 
-      <Sidebar batchId={batchId} promptVersion="v1.1"/>
+      <Sidebar
+        batchId={batchId}
+        promptVersion="v1.1"
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      {/* Floating menu button — always visible when sidebar is closed */}
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          style={{
+            position: 'fixed', bottom: 24, right: 24, zIndex: 30,
+            width: 48, height: 48, borderRadius: '50%',
+            background: OHM.primary, border: 'none',
+            cursor: 'pointer', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 4,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+          }}
+        >
+          <span style={{ display: 'block', width: 18, height: 1.5, background: '#fff' }}/>
+          <span style={{ display: 'block', width: 18, height: 1.5, background: '#fff' }}/>
+          <span style={{ display: 'block', width: 18, height: 1.5, background: '#fff' }}/>
+        </button>
+      )}
 
       <main style={{ flex: 1, minWidth: 0, background: OHM.paper }}>
 
-        <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: '24px 44px 20px', position: 'sticky', top: 0, background: OHM.paper, zIndex: 10 }}>
+        <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: '16px 20px 16px', position: 'sticky', top: 0, background: OHM.paper, zIndex: 10 }}>
+          {/* Hamburger row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <button
+              onClick={() => setSidebarOpen(true)}
+              style={{ background: 'none', border: `1px solid ${OHM.line}`, borderRadius: 6, cursor: 'pointer', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}
+            >
+              <span style={{ display: 'block', width: 16, height: 1.5, background: OHM.primary }}/>
+              <span style={{ display: 'block', width: 16, height: 1.5, background: OHM.primary }}/>
+              <span style={{ display: 'block', width: 16, height: 1.5, background: OHM.primary }}/>
+            </button>
+            <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 14, color: OHM.muted }}>OHM NEURO</div>
+          </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 10.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 8 }}>
