@@ -460,8 +460,8 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
                   Cancel
                 </button>
                 {!canConfirm && (showPanel === 'exclude' || voteDir) && (
-                  <div style={{ fontSize: 11, color: OHM.mutedLt, marginTop: 8 }}>
-                    Pick at least one bubble above to confirm.
+                  <div style={{ fontSize: 11, color: OHM.mutedLt, width: '100%', marginTop: 8 }}>
+                    Select a reason to confirm.
                   </div>
                 )}
               </div>
