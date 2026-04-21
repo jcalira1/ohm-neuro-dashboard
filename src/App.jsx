@@ -460,9 +460,9 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
                   Cancel
                 </button>
                 {!canConfirm && (showPanel === 'exclude' || voteDir) && (
-                  <span style={{ fontSize: 11, color: OHM.mutedLt }}>
-                    Select at least one reason to confirm
-                  </span>
+                  <div style={{ fontSize: 11, color: OHM.mutedLt, marginTop: 8 }}>
+                    Pick at least one bubble above to confirm.
+                  </div>
                 )}
               </div>
 
@@ -470,7 +470,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
           )}
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             {!done ? (
               !showPanel && <>
                 <TriageBtn kind="full" onClick={handleFull} disabled={saving}>Draft</TriageBtn>
@@ -546,7 +546,7 @@ export default function App() {
 
       <main style={{ flex: 1, minWidth: 0, background: OHM.paper }}>
 
-        <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: '16px 20px 16px', position: 'sticky', top: 0, background: OHM.paper, zIndex: 10 }}>
+        <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: '16px 20px 16px', background: OHM.paper }}>
           {/* Hamburger row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
             <button
@@ -584,7 +584,7 @@ export default function App() {
           </div>
 
           {!loading && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 1, background: OHM.line, borderRadius: 6, overflow: 'hidden', border: `1px solid ${OHM.line}`, marginTop: 22 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 1, background: OHM.line, borderRadius: 6, overflow: 'hidden', border: `1px solid ${OHM.line}`, marginTop: 22 }}>
               {[
                 ['Topics',     topics.length,                                                        OHM.primary],
                 ['Researching',topics.filter(t => t.status === 'Researching').length,                OHM.blueInk],
