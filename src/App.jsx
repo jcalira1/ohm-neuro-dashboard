@@ -48,6 +48,13 @@ const BUBBLES = {
     'Not relevant to audience',
     'Too broad',
   ],
+  exclude: [
+    'Not relevant to our audience',
+    'Already covered recently',
+    'Too controversial',
+    'Insufficient evidence',
+    'Outside our scope',
+  ],
 }
 
 function weekLabel() {
@@ -153,9 +160,10 @@ function ProgressRing({ done, total }) {
 
 function TriageBtn({ children, kind, onClick, disabled }) {
   const styles = {
-    full: { bg: OHM.primary,  fg: '#fff',      bd: OHM.primary  },
-    supp: { bg: OHM.paper,    fg: OHM.blueInk, bd: OHM.blueLine },
-    mon:  { bg: OHM.paper,    fg: OHM.muted,   bd: OHM.line     },
+    full: { bg: OHM.primary,  fg: '#fff',       bd: OHM.primary  },
+    supp: { bg: OHM.paper,    fg: OHM.blueInk,  bd: OHM.blueLine },
+    mon:  { bg: OHM.paper,    fg: OHM.muted,    bd: OHM.line     },
+    excl: { bg: OHM.paper,    fg: OHM.roseInk,  bd: OHM.roseLine },
   }[kind]
   return (
     <button onClick={onClick} disabled={disabled} style={{
@@ -170,10 +178,10 @@ function TriageBtn({ children, kind, onClick, disabled }) {
 
 function TopicRow({ topic, allTopics, onReact, onUndo }) {
   const [reaction, setReaction]         = useState(null)
-  const [showPanel, setShowPanel]       = useState(false)
-  const [voteDir, setVoteDir]           = useState(null)       // 'up' | 'down' | null
-  const [selectedBubbles, setSelected]  = useState([])         // array of selected bubble strings
-  const [notes, setNotes]               = useState('')         // optional free text
+  const [showPanel, setShowPanel]       = useState(false)  // 'monitor' | 'exclude' | null
+  const [voteDir, setVoteDir]           = useState(null)
+  const [selectedBubbles, setSelected]  = useState([])
+  const [notes, setNotes]               = useState('')
   const [saving, setSaving]             = useState(false)
   const [saveError, setSaveError]       = useState(null)
 
@@ -181,7 +189,9 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
   const done = !!reaction
 
   // Confirm enabled if a vote direction is picked AND at least one bubble is selected (or notes written)
-  const canConfirm = voteDir !== null && (selectedBubbles.length > 0 || notes.trim().length > 0)
+  const canConfirmMon  = voteDir !== null && (selectedBubbles.length > 0 || notes.trim().length > 0)
+  const canConfirmExcl = selectedBubbles.length > 0 || notes.trim().length > 0
+  const canConfirm     = showPanel === 'monitor' ? canConfirmMon : canConfirmExcl
 
   function toggleBubble(label) {
     setSelected(prev =>
@@ -209,12 +219,19 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
 
   async function handleFull() { setReaction('full'); await persist('full_piece', null, [], '') }
   async function handleSupp() { setReaction('supp'); await persist('supporting', null, [], '') }
-  function handleMon()        { setShowPanel(true) }
+  function handleMon()        { setShowPanel('monitor'); setSelected([]); setVoteDir(null); setNotes('') }
+  function handleExcl()       { setShowPanel('exclude'); setSelected([]); setVoteDir(null); setNotes('') }
 
   async function handleConfirm() {
-    setReaction('mon')
-    setShowPanel(false)
-    await persist('monitor', voteDir, selectedBubbles, notes)
+    if (showPanel === 'monitor') {
+      setReaction('mon')
+      setShowPanel(false)
+      await persist('monitor', voteDir, selectedBubbles, notes)
+    } else {
+      setReaction('excl')
+      setShowPanel(false)
+      await persist('exclude', null, selectedBubbles, notes)
+    }
   }
 
   function handleCancel() {
@@ -234,7 +251,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
     onUndo()
   }
 
-  const reactionLabel = reaction === 'full' ? '✓ Draft' : reaction === 'supp' ? '✓ Support' : '◦ Monitoring'
+  const reactionLabel = reaction === 'full' ? '✓ Draft' : reaction === 'supp' ? '✓ Support' : reaction === 'excl' ? '✗ Excluded' : '◦ Monitoring'
   const reactionColor = reaction === 'mon' ? OHM.roseInk : OHM.primary
 
   // Colors for vote direction buttons
@@ -344,14 +361,14 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
               {voteDir && (
                 <>
                   <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
-                    {voteDir === 'up' ? 'Why it is worth watching' : 'Why it is low priority'}
+                    {showPanel === 'exclude' ? 'Why exclude this topic' : voteDir === 'up' ? 'Why it is worth watching' : 'Why it is low priority'}
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-                    {BUBBLES[voteDir].map(label => {
+                    {(showPanel === 'exclude' ? BUBBLES.exclude : BUBBLES[voteDir]).map(label => {
                       const active = selectedBubbles.includes(label)
-                      const activeStyle = voteDir === 'up'
-                        ? { border: OHM.primary, bg: OHM.sage,   color: OHM.primary }
-                        : { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
+                      const activeStyle = showPanel === 'exclude' || voteDir === 'down'
+                        ? { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
+                        : { border: OHM.primary,  bg: OHM.sage,   color: OHM.primary }
                       const s = active ? activeStyle : { border: OHM.line, bg: OHM.paper, color: OHM.muted }
                       return (
                         <button
@@ -433,6 +450,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
                 <TriageBtn kind="full" onClick={handleFull} disabled={saving}>Draft</TriageBtn>
                 <TriageBtn kind="supp" onClick={handleSupp} disabled={saving}>Support</TriageBtn>
                 <TriageBtn kind="mon"  onClick={handleMon}  disabled={saving}>Monitor</TriageBtn>
+                <TriageBtn kind="excl" onClick={handleExcl} disabled={saving}>Exclude</TriageBtn>
               </>
             ) : (
               <button onClick={handleUndo} style={{ fontSize: 12, color: OHM.muted, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
