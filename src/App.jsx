@@ -150,18 +150,16 @@ function TriageBtn({ children, kind, onClick, disabled }) {
   )
 }
 
-function TopicRow({ topic, idx, allTopics, onReact, onUndo }) {
+function TopicRow({ topic, allTopics, onReact, onUndo }) {
   const [reaction, setReaction]     = useState(null)
   const [showReason, setShowReason] = useState(false)
-  const [voteDir, setVoteDir]       = useState(null)   // ── NEW: 'up' | 'down' | null
+  const [voteDir, setVoteDir]       = useState(null)
   const [reason, setReason]         = useState('')
   const [saving, setSaving]         = useState(false)
   const [saveError, setSaveError]   = useState(null)
 
   const cat  = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
   const done = !!reaction
-
-  // ── NEW: Confirm is only enabled when a reason has been typed
   const canConfirmMon = reason.trim().length > 0
 
   async function persist(type, reasonText = '', vote = null) {
@@ -171,7 +169,7 @@ function TopicRow({ topic, idx, allTopics, onReact, onUndo }) {
       topic_id: topic.id,
       reaction: type,
       reason: reasonText || null,
-      vote_direction: vote,        // ── NEW: stores 'up' or 'down'
+      vote_direction: vote,
       prompt_version: 'v1.1',
     })
     if (error) setSaveError('Failed to save — try again')
@@ -183,7 +181,6 @@ function TopicRow({ topic, idx, allTopics, onReact, onUndo }) {
   async function handleSupp() { setReaction('supp'); setShowReason(false); await persist('supporting') }
   function handleMon()        { setReaction('mon');  setShowReason(true) }
 
-  // ── NEW: passes vote direction into persist
   async function handleConfirmMon() {
     setShowReason(false)
     await persist('monitor', reason, voteDir)
@@ -193,7 +190,7 @@ function TopicRow({ topic, idx, allTopics, onReact, onUndo }) {
     setReaction(null)
     setShowReason(false)
     setReason('')
-    setVoteDir(null)      // ── NEW: reset vote on undo
+    setVoteDir(null)
     setSaveError(null)
     onUndo()
   }
@@ -258,50 +255,48 @@ function TopicRow({ topic, idx, allTopics, onReact, onUndo }) {
             <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
               {topic.signals.map(s => (
                 <span key={s} style={{ fontSize: 10.5, color: OHM.muted, padding: '2px 8px', border: `1px solid ${OHM.line}`, borderRadius: 99, background: OHM.paper, letterSpacing: 0.1 }}>
-                  ◦ {s}
+                  o {s}
                 </span>
               ))}
             </div>
           )}
 
-          {/* ── NEW: Monitor panel with vote + mandatory reason ── */}
+          {/* Monitor panel */}
           {showReason && !done && (
             <div style={{ marginTop: 12, padding: '14px 16px', borderRadius: 6, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
 
-              {/* Vote row */}
+              {/* Vote buttons */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <span style={{ fontSize: 11, color: OHM.muted, marginRight: 4 }}>Signal strength</span>
 
-                {/* Thumbs up */}
                 <button
                   onClick={() => setVoteDir(v => v === 'up' ? null : 'up')}
                   style={{
-                    padding: '5px 12px', borderRadius: 4, fontSize: 12, fontFamily: 'inherit',
-                    cursor: 'pointer', fontWeight: 500,
+                    padding: '5px 14px', borderRadius: 4, fontSize: 12,
+                    fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500,
                     border: `1px solid ${voteDir === 'up' ? OHM.primary : OHM.line}`,
                     background: voteDir === 'up' ? OHM.sage : OHM.paper,
                     color: voteDir === 'up' ? OHM.primary : OHM.muted,
                   }}
                 >
-                  ↑ Worth watching
+                  + Worth watching
                 </button>
 
-                {/* Thumbs down */}
                 <button
                   onClick={() => setVoteDir(v => v === 'down' ? null : 'down')}
                   style={{
-                    padding: '5px 12px', borderRadius: 4, fontSize: 12, fontFamily: 'inherit',
-                    cursor: 'pointer', fontWeight: 500,
+                    padding: '5px 14px', borderRadius: 4, fontSize: 12,
+                    fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500,
                     border: `1px solid ${voteDir === 'down' ? OHM.roseInk : OHM.line}`,
                     background: voteDir === 'down' ? OHM.roseBg : OHM.paper,
                     color: voteDir === 'down' ? OHM.roseInk : OHM.muted,
                   }}
                 >
-                  ↓ Low priority
+                  - Low priority
                 </button>
               </div>
 
-              {/* Mandatory reason field */}
+              {/* Mandatory reason */}
               <input
                 value={reason}
                 onChange={e => setReason(e.target.value)}
@@ -315,14 +310,12 @@ function TopicRow({ topic, idx, allTopics, onReact, onUndo }) {
                 }}
               />
 
-              {/* Hint text */}
               {!reason.trim() && (
                 <div style={{ fontSize: 11, color: OHM.mutedLt, marginBottom: 10 }}>
                   A reason is required — it trains the scoring model.
                 </div>
               )}
 
-              {/* Confirm / Cancel */}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   onClick={handleConfirmMon}
@@ -336,7 +329,7 @@ function TopicRow({ topic, idx, allTopics, onReact, onUndo }) {
                     cursor: canConfirmMon ? 'pointer' : 'not-allowed',
                   }}
                 >
-                  {saving ? 'Saving…' : 'Confirm'}
+                  {saving ? 'Saving...' : 'Confirm'}
                 </button>
                 <button
                   onClick={() => { setReaction(null); setShowReason(false); setVoteDir(null); setReason('') }}
@@ -412,7 +405,7 @@ export default function App() {
                 This week's signal.
               </h1>
               <div style={{ fontSize: 13, color: OHM.muted, marginTop: 8, maxWidth: 560, lineHeight: 1.55 }}>
-                {loading ? 'Loading topics…' : `${topics.length} topics from Supabase. Decide what becomes a draft, supporting link, or monitor.`}
+                {loading ? 'Loading topics...' : `${topics.length} topics from Supabase. Decide what becomes a draft, supporting link, or monitor.`}
               </div>
             </div>
 
@@ -460,7 +453,7 @@ export default function App() {
           </div>
 
           {loading && (
-            <div style={{ padding: '40px 0', color: OHM.muted, fontSize: 14 }}>Loading this week's signal…</div>
+            <div style={{ padding: '40px 0', color: OHM.muted, fontSize: 14 }}>Loading this week's signal...</div>
           )}
           {!loading && topics.length === 0 && (
             <div style={{ padding: '32px', borderRadius: 8, background: OHM.sage, border: `1px solid ${OHM.sageDeep}` }}>
@@ -481,7 +474,6 @@ export default function App() {
                 <TopicRow
                   key={topic.id}
                   topic={topic}
-                  idx={topics.indexOf(topic)}
                   allTopics={topics}
                   onReact={()  => setReactedCount(c => c + 1)}
                   onUndo={()   => setReactedCount(c => Math.max(0, c - 1))}
