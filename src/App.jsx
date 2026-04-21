@@ -32,6 +32,24 @@ const CAT_STYLE = {
 
 const STATUSES = ['Idea','Under Review','Selected for Batch','Researching','Drafting','Editing','Published']
 
+// ── Reason bubbles per vote direction ──
+const BUBBLES = {
+  up: [
+    'Strong evidence base',
+    'Emerging trend',
+    'High audience relevance',
+    'Unique angle',
+    'Timely topic',
+  ],
+  down: [
+    'Already covered',
+    'Too niche',
+    'Weak evidence',
+    'Not relevant to audience',
+    'Too broad',
+  ],
+}
+
 function weekLabel() {
   const now = new Date()
   const start = new Date(now)
@@ -151,20 +169,32 @@ function TriageBtn({ children, kind, onClick, disabled }) {
 }
 
 function TopicRow({ topic, allTopics, onReact, onUndo }) {
-  const [reaction, setReaction]     = useState(null)
-  const [showReason, setShowReason] = useState(false)
-  const [voteDir, setVoteDir]       = useState(null)
-  const [reason, setReason]         = useState('')
-  const [saving, setSaving]         = useState(false)
-  const [saveError, setSaveError]   = useState(null)
+  const [reaction, setReaction]         = useState(null)
+  const [showPanel, setShowPanel]       = useState(false)
+  const [voteDir, setVoteDir]           = useState(null)       // 'up' | 'down' | null
+  const [selectedBubbles, setSelected]  = useState([])         // array of selected bubble strings
+  const [notes, setNotes]               = useState('')         // optional free text
+  const [saving, setSaving]             = useState(false)
+  const [saveError, setSaveError]       = useState(null)
 
   const cat  = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
   const done = !!reaction
-  const canConfirmMon = reason.trim().length > 0
 
-  async function persist(type, reasonText = '', vote = null) {
+  // Confirm enabled if a vote direction is picked AND at least one bubble is selected (or notes written)
+  const canConfirm = voteDir !== null && (selectedBubbles.length > 0 || notes.trim().length > 0)
+
+  function toggleBubble(label) {
+    setSelected(prev =>
+      prev.includes(label) ? prev.filter(b => b !== label) : [...prev, label]
+    )
+  }
+
+  async function persist(type, vote, bubbles, notesText) {
     setSaving(true)
     setSaveError(null)
+    const reasonText = bubbles.length > 0
+      ? bubbles.join(', ') + (notesText.trim() ? ' — ' + notesText.trim() : '')
+      : notesText.trim()
     const { error } = await supabase.from('reactions').insert({
       topic_id: topic.id,
       reaction: type,
@@ -177,29 +207,40 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
     setSaving(false)
   }
 
-  async function handleFull() { setReaction('full'); await persist('full_piece') }
-  async function handleSupp() { setReaction('supp'); await persist('supporting') }
+  async function handleFull() { setReaction('full'); await persist('full_piece', null, [], '') }
+  async function handleSupp() { setReaction('supp'); await persist('supporting', null, [], '') }
+  function handleMon()        { setShowPanel(true) }
 
-  // ── KEY FIX: do NOT set reaction here, only open the panel ──
-  function handleMon() { setShowReason(true) }
+  async function handleConfirm() {
+    setReaction('mon')
+    setShowPanel(false)
+    await persist('monitor', voteDir, selectedBubbles, notes)
+  }
 
-  async function handleConfirmMon() {
-    setReaction('mon')   // ── set reaction only after confirm
-    setShowReason(false)
-    await persist('monitor', reason, voteDir)
+  function handleCancel() {
+    setShowPanel(false)
+    setVoteDir(null)
+    setSelected([])
+    setNotes('')
   }
 
   function handleUndo() {
     setReaction(null)
-    setShowReason(false)
-    setReason('')
+    setShowPanel(false)
     setVoteDir(null)
+    setSelected([])
+    setNotes('')
     setSaveError(null)
     onUndo()
   }
 
   const reactionLabel = reaction === 'full' ? '✓ Draft' : reaction === 'supp' ? '✓ Support' : '◦ Monitoring'
   const reactionColor = reaction === 'mon' ? OHM.roseInk : OHM.primary
+
+  // Colors for vote direction buttons
+  const upActive   = { border: OHM.primary,  bg: OHM.sage,   color: OHM.primary  }
+  const downActive = { border: OHM.roseInk,  bg: OHM.roseBg, color: OHM.roseInk  }
+  const inactive   = { border: OHM.line,      bg: OHM.paper,  color: OHM.muted    }
 
   return (
     <article style={{
@@ -220,6 +261,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
 
         <div style={{ flex: 1, minWidth: 0 }}>
 
+          {/* Meta row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
             {topic.category && (
               <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', padding: '2px 8px', borderRadius: 3, background: cat.bg, color: cat.ink, border: `1px solid ${cat.line}` }}>
@@ -240,6 +282,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             {saveError && <span style={{ fontSize: 11, color: OHM.roseInk, marginLeft: 'auto' }}>{saveError}</span>}
           </div>
 
+          {/* Title */}
           <h2 style={{
             fontFamily: '"Source Serif 4", Georgia, serif',
             fontSize: 21, fontWeight: 400, margin: '0 0 8px 0',
@@ -248,12 +291,14 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             {topic.title}
           </h2>
 
+          {/* Research brief */}
           {topic.research_brief && (
             <p style={{ fontSize: 13.5, color: OHM.muted, margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
               {topic.research_brief}
             </p>
           )}
 
+          {/* Signals */}
           {topic.signals && Array.isArray(topic.signals) && topic.signals.length > 0 && (
             <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
               {topic.signals.map(s => (
@@ -264,91 +309,127 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             </div>
           )}
 
-          {/* Monitor panel — shows when Monitor is clicked, hides after Confirm */}
-          {showReason && (
-            <div style={{ marginTop: 12, padding: '14px 16px', borderRadius: 6, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
+          {/* ── Monitor panel ── */}
+          {showPanel && (
+            <div style={{ marginTop: 14, padding: '16px 18px', borderRadius: 8, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 11, color: OHM.muted, marginRight: 4 }}>Signal strength</span>
-
-                <button
-                  onClick={() => setVoteDir(v => v === 'up' ? null : 'up')}
-                  style={{
-                    padding: '5px 14px', borderRadius: 4, fontSize: 12,
-                    fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500,
-                    border: `1px solid ${voteDir === 'up' ? OHM.primary : OHM.line}`,
-                    background: voteDir === 'up' ? OHM.sage : OHM.paper,
-                    color: voteDir === 'up' ? OHM.primary : OHM.muted,
-                  }}
-                >
-                  + Worth watching
-                </button>
-
-                <button
-                  onClick={() => setVoteDir(v => v === 'down' ? null : 'down')}
-                  style={{
-                    padding: '5px 14px', borderRadius: 4, fontSize: 12,
-                    fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500,
-                    border: `1px solid ${voteDir === 'down' ? OHM.roseInk : OHM.line}`,
-                    background: voteDir === 'down' ? OHM.roseBg : OHM.paper,
-                    color: voteDir === 'down' ? OHM.roseInk : OHM.muted,
-                  }}
-                >
-                  - Low priority
-                </button>
+              {/* Step 1 — vote direction */}
+              <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
+                Signal strength
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                {[
+                  { dir: 'up',   label: '+ Worth watching' },
+                  { dir: 'down', label: '- Low priority'   },
+                ].map(({ dir, label }) => {
+                  const s = voteDir === dir ? (dir === 'up' ? upActive : downActive) : inactive
+                  return (
+                    <button
+                      key={dir}
+                      onClick={() => { setVoteDir(v => v === dir ? null : dir); setSelected([]) }}
+                      style={{
+                        padding: '6px 16px', borderRadius: 99, fontSize: 12,
+                        fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500,
+                        border: `1px solid ${s.border}`,
+                        background: s.bg, color: s.color,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
               </div>
 
-              <input
-                value={reason}
-                onChange={e => setReason(e.target.value)}
-                placeholder="Why monitor? (required)"
-                style={{
-                  width: '100%', padding: '7px 10px',
-                  border: `1px solid ${reason.trim() ? OHM.primary : OHM.line}`,
-                  borderRadius: 4, fontSize: 12, fontFamily: 'inherit',
-                  background: OHM.paper, outline: 'none', marginBottom: 10,
-                  boxSizing: 'border-box',
-                }}
-              />
+              {/* Step 2 — reason bubbles (appear after vote direction selected) */}
+              {voteDir && (
+                <>
+                  <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
+                    {voteDir === 'up' ? 'Why it is worth watching' : 'Why it is low priority'}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                    {BUBBLES[voteDir].map(label => {
+                      const active = selectedBubbles.includes(label)
+                      const activeStyle = voteDir === 'up'
+                        ? { border: OHM.primary, bg: OHM.sage,   color: OHM.primary }
+                        : { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
+                      const s = active ? activeStyle : { border: OHM.line, bg: OHM.paper, color: OHM.muted }
+                      return (
+                        <button
+                          key={label}
+                          onClick={() => toggleBubble(label)}
+                          style={{
+                            padding: '5px 12px', borderRadius: 99, fontSize: 12,
+                            fontFamily: 'inherit', cursor: 'pointer', fontWeight: active ? 500 : 400,
+                            border: `1px solid ${s.border}`,
+                            background: s.bg, color: s.color,
+                          }}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
 
-              {!reason.trim() && (
-                <div style={{ fontSize: 11, color: OHM.mutedLt, marginBottom: 10 }}>
-                  A reason is required — it trains the scoring model.
-                </div>
+                  {/* Optional notes */}
+                  <div style={{ fontSize: 11, color: OHM.mutedLt, marginBottom: 6 }}>
+                    Additional notes (optional)
+                  </div>
+                  <textarea
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Anything else worth capturing..."
+                    rows={2}
+                    style={{
+                      width: '100%', padding: '7px 10px',
+                      border: `1px solid ${notes.trim() ? OHM.primary : OHM.line}`,
+                      borderRadius: 4, fontSize: 12, fontFamily: 'inherit',
+                      background: OHM.paper, outline: 'none', resize: 'vertical',
+                      boxSizing: 'border-box', marginBottom: 14, color: OHM.ink,
+                    }}
+                  />
+                </>
               )}
 
-              <div style={{ display: 'flex', gap: 8 }}>
+              {/* Confirm / Cancel */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button
-                  onClick={handleConfirmMon}
-                  disabled={!canConfirmMon || saving}
+                  onClick={handleConfirm}
+                  disabled={!canConfirm || saving}
                   style={{
-                    padding: '6px 14px', borderRadius: 4,
-                    border: `1px solid ${canConfirmMon ? OHM.primary : OHM.line}`,
-                    background: canConfirmMon ? OHM.primary : OHM.lineSoft,
-                    color: canConfirmMon ? '#fff' : OHM.mutedLt,
+                    padding: '6px 16px', borderRadius: 4,
+                    border: `1px solid ${canConfirm ? OHM.primary : OHM.line}`,
+                    background: canConfirm ? OHM.primary : OHM.lineSoft,
+                    color: canConfirm ? '#fff' : OHM.mutedLt,
                     fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
-                    cursor: canConfirmMon ? 'pointer' : 'not-allowed',
+                    cursor: canConfirm ? 'pointer' : 'not-allowed',
                   }}
                 >
                   {saving ? 'Saving...' : 'Confirm'}
                 </button>
                 <button
-                  onClick={() => { setShowReason(false); setVoteDir(null); setReason('') }}
+                  onClick={handleCancel}
                   style={{
-                    padding: '6px 14px', borderRadius: 4,
+                    padding: '6px 16px', borderRadius: 4,
                     border: `1px solid ${OHM.line}`, background: OHM.paper,
                     color: OHM.muted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >
                   Cancel
                 </button>
+                {!canConfirm && voteDir && (
+                  <span style={{ fontSize: 11, color: OHM.mutedLt }}>
+                    Select at least one reason to confirm
+                  </span>
+                )}
               </div>
+
             </div>
           )}
 
+          {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
             {!done ? (
-              !showReason && <>
+              !showPanel && <>
                 <TriageBtn kind="full" onClick={handleFull} disabled={saving}>Draft</TriageBtn>
                 <TriageBtn kind="supp" onClick={handleSupp} disabled={saving}>Support</TriageBtn>
                 <TriageBtn kind="mon"  onClick={handleMon}  disabled={saving}>Monitor</TriageBtn>
