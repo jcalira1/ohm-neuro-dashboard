@@ -32,7 +32,6 @@ const CAT_STYLE = {
 
 const STATUSES = ['Idea','Under Review','Selected for Batch','Researching','Drafting','Editing','Published']
 
-// ── Reason bubbles per vote direction ──
 const BUBBLES = {
   up: [
     'Strong evidence base',
@@ -50,10 +49,10 @@ const BUBBLES = {
   ],
   exclude: [
     'Not relevant to our audience',
-    'Already covered recently',
-    'Too controversial',
-    'Insufficient evidence',
-    'Outside our scope',
+    'Already covered this',
+    'No credible evidence',
+    'Not aligned with our editorial angle',
+    'Low quality source',
   ],
 }
 
@@ -160,10 +159,10 @@ function ProgressRing({ done, total }) {
 
 function TriageBtn({ children, kind, onClick, disabled }) {
   const styles = {
-    full: { bg: OHM.primary,  fg: '#fff',       bd: OHM.primary  },
-    supp: { bg: OHM.paper,    fg: OHM.blueInk,  bd: OHM.blueLine },
-    mon:  { bg: OHM.paper,    fg: OHM.muted,    bd: OHM.line     },
-    excl: { bg: OHM.paper,    fg: OHM.roseInk,  bd: OHM.roseLine },
+    full: { bg: OHM.primary,  fg: '#fff',      bd: OHM.primary  },
+    supp: { bg: OHM.paper,    fg: OHM.blueInk, bd: OHM.blueLine },
+    mon:  { bg: OHM.paper,    fg: OHM.muted,   bd: OHM.line     },
+    excl: { bg: OHM.paper,    fg: OHM.roseInk, bd: OHM.roseLine },
   }[kind]
   return (
     <button onClick={onClick} disabled={disabled} style={{
@@ -177,18 +176,17 @@ function TriageBtn({ children, kind, onClick, disabled }) {
 }
 
 function TopicRow({ topic, allTopics, onReact, onUndo }) {
-  const [reaction, setReaction]         = useState(null)
-  const [showPanel, setShowPanel]       = useState(false)  // 'monitor' | 'exclude' | null
-  const [voteDir, setVoteDir]           = useState(null)
-  const [selectedBubbles, setSelected]  = useState([])
-  const [notes, setNotes]               = useState('')
-  const [saving, setSaving]             = useState(false)
-  const [saveError, setSaveError]       = useState(null)
+  const [reaction, setReaction]        = useState(null)
+  const [showPanel, setShowPanel]      = useState(null)  // 'monitor' | 'exclude' | null
+  const [voteDir, setVoteDir]          = useState(null)
+  const [selectedBubbles, setSelected] = useState([])
+  const [notes, setNotes]              = useState('')
+  const [saving, setSaving]            = useState(false)
+  const [saveError, setSaveError]      = useState(null)
 
   const cat  = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
   const done = !!reaction
 
-  // Confirm enabled if a vote direction is picked AND at least one bubble is selected (or notes written)
   const canConfirmMon  = voteDir !== null && (selectedBubbles.length > 0 || notes.trim().length > 0)
   const canConfirmExcl = selectedBubbles.length > 0 || notes.trim().length > 0
   const canConfirm     = showPanel === 'monitor' ? canConfirmMon : canConfirmExcl
@@ -219,23 +217,23 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
 
   async function handleFull() { setReaction('full'); await persist('full_piece', null, [], '') }
   async function handleSupp() { setReaction('supp'); await persist('supporting', null, [], '') }
-  function handleMon()        { setShowPanel('monitor'); setSelected([]); setVoteDir(null); setNotes('') }
-  function handleExcl()       { setShowPanel('exclude'); setSelected([]); setVoteDir(null); setNotes('') }
+  function handleMon()  { setShowPanel('monitor'); setSelected([]); setVoteDir(null); setNotes('') }
+  function handleExcl() { setShowPanel('exclude'); setSelected([]); setVoteDir(null); setNotes('') }
 
   async function handleConfirm() {
     if (showPanel === 'monitor') {
       setReaction('mon')
-      setShowPanel(false)
+      setShowPanel(null)
       await persist('monitor', voteDir, selectedBubbles, notes)
     } else {
       setReaction('excl')
-      setShowPanel(false)
+      setShowPanel(null)
       await persist('exclude', null, selectedBubbles, notes)
     }
   }
 
   function handleCancel() {
-    setShowPanel(false)
+    setShowPanel(null)
     setVoteDir(null)
     setSelected([])
     setNotes('')
@@ -243,7 +241,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
 
   function handleUndo() {
     setReaction(null)
-    setShowPanel(false)
+    setShowPanel(null)
     setVoteDir(null)
     setSelected([])
     setNotes('')
@@ -251,13 +249,12 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
     onUndo()
   }
 
-  const reactionLabel = reaction === 'full' ? '✓ Draft' : reaction === 'supp' ? '✓ Support' : reaction === 'excl' ? '✗ Excluded' : '◦ Monitoring'
-  const reactionColor = reaction === 'mon' ? OHM.roseInk : OHM.primary
+  const reactionLabel = reaction === 'full' ? '✓ Draft' : reaction === 'supp' ? '✓ Support' : reaction === 'excl' ? '✗ No' : '◦ Monitoring'
+  const reactionColor = reaction === 'excl' ? OHM.roseInk : reaction === 'mon' ? OHM.roseInk : OHM.primary
 
-  // Colors for vote direction buttons
-  const upActive   = { border: OHM.primary,  bg: OHM.sage,   color: OHM.primary  }
-  const downActive = { border: OHM.roseInk,  bg: OHM.roseBg, color: OHM.roseInk  }
-  const inactive   = { border: OHM.line,      bg: OHM.paper,  color: OHM.muted    }
+  const upActive   = { border: OHM.primary, bg: OHM.sage,   color: OHM.primary }
+  const downActive = { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
+  const inactive   = { border: OHM.line,    bg: OHM.paper,  color: OHM.muted   }
 
   return (
     <article style={{
@@ -278,7 +275,6 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
 
         <div style={{ flex: 1, minWidth: 0 }}>
 
-          {/* Meta row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
             {topic.category && (
               <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', padding: '2px 8px', borderRadius: 3, background: cat.bg, color: cat.ink, border: `1px solid ${cat.line}` }}>
@@ -299,7 +295,6 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             {saveError && <span style={{ fontSize: 11, color: OHM.roseInk, marginLeft: 'auto' }}>{saveError}</span>}
           </div>
 
-          {/* Title */}
           <h2 style={{
             fontFamily: '"Source Serif 4", Georgia, serif',
             fontSize: 21, fontWeight: 400, margin: '0 0 8px 0',
@@ -308,14 +303,12 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             {topic.title}
           </h2>
 
-          {/* Research brief */}
           {topic.research_brief && (
             <p style={{ fontSize: 13.5, color: OHM.muted, margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
               {topic.research_brief}
             </p>
           )}
 
-          {/* Signals */}
           {topic.signals && Array.isArray(topic.signals) && topic.signals.length > 0 && (
             <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
               {topic.signals.map(s => (
@@ -326,42 +319,46 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             </div>
           )}
 
-          {/* ── Monitor panel ── */}
+          {/* ── Monitor / Exclude panel ── */}
           {showPanel && (
             <div style={{ marginTop: 14, padding: '16px 18px', borderRadius: 8, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
 
-              {/* Step 1 — vote direction */}
-              <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
-                Signal strength
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                {[
-                  { dir: 'up',   label: '+ Worth watching' },
-                  { dir: 'down', label: '- Low priority'   },
-                ].map(({ dir, label }) => {
-                  const s = voteDir === dir ? (dir === 'up' ? upActive : downActive) : inactive
-                  return (
-                    <button
-                      key={dir}
-                      onClick={() => { setVoteDir(v => v === dir ? null : dir); setSelected([]) }}
-                      style={{
-                        padding: '6px 16px', borderRadius: 99, fontSize: 12,
-                        fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500,
-                        border: `1px solid ${s.border}`,
-                        background: s.bg, color: s.color,
-                      }}
-                    >
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Step 2 — reason bubbles (appear after vote direction selected) */}
-              {voteDir && (
+              {/* Vote direction — Monitor only */}
+              {showPanel === 'monitor' && (
                 <>
                   <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
-                    {showPanel === 'exclude' ? 'Why exclude this topic' : voteDir === 'up' ? 'Why it is worth watching' : 'Why it is low priority'}
+                    Signal strength
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    {[
+                      { dir: 'up',   label: '+ Worth watching' },
+                      { dir: 'down', label: '- Low priority'   },
+                    ].map(({ dir, label }) => {
+                      const s = voteDir === dir ? (dir === 'up' ? upActive : downActive) : inactive
+                      return (
+                        <button
+                          key={dir}
+                          onClick={() => { setVoteDir(v => v === dir ? null : dir); setSelected([]) }}
+                          style={{
+                            padding: '6px 16px', borderRadius: 99, fontSize: 12,
+                            fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500,
+                            border: `1px solid ${s.border}`,
+                            background: s.bg, color: s.color,
+                          }}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Reason bubbles — show immediately for Exclude, after vote pick for Monitor */}
+              {(showPanel === 'exclude' || (showPanel === 'monitor' && voteDir)) && (
+                <>
+                  <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
+                    {showPanel === 'exclude' ? 'Why this is a No' : voteDir === 'up' ? 'Why it is worth watching' : 'Why it is low priority'}
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
                     {(showPanel === 'exclude' ? BUBBLES.exclude : BUBBLES[voteDir]).map(label => {
@@ -433,7 +430,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
                 >
                   Cancel
                 </button>
-                {!canConfirm && voteDir && (
+                {!canConfirm && (showPanel === 'exclude' || voteDir) && (
                   <span style={{ fontSize: 11, color: OHM.mutedLt }}>
                     Select at least one reason to confirm
                   </span>
