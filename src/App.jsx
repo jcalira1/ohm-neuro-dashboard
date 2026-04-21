@@ -177,11 +177,14 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
     setSaving(false)
   }
 
-  async function handleFull() { setReaction('full'); setShowReason(false); await persist('full_piece') }
-  async function handleSupp() { setReaction('supp'); setShowReason(false); await persist('supporting') }
-  function handleMon()        { setReaction('mon');  setShowReason(true) }
+  async function handleFull() { setReaction('full'); await persist('full_piece') }
+  async function handleSupp() { setReaction('supp'); await persist('supporting') }
+
+  // ── KEY FIX: do NOT set reaction here, only open the panel ──
+  function handleMon() { setShowReason(true) }
 
   async function handleConfirmMon() {
+    setReaction('mon')   // ── set reaction only after confirm
     setShowReason(false)
     await persist('monitor', reason, voteDir)
   }
@@ -261,11 +264,10 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             </div>
           )}
 
-          {/* Monitor panel */}
-          {showReason && !done && (
+          {/* Monitor panel — shows when Monitor is clicked, hides after Confirm */}
+          {showReason && (
             <div style={{ marginTop: 12, padding: '14px 16px', borderRadius: 6, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
 
-              {/* Vote buttons */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <span style={{ fontSize: 11, color: OHM.muted, marginRight: 4 }}>Signal strength</span>
 
@@ -296,7 +298,6 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
                 </button>
               </div>
 
-              {/* Mandatory reason */}
               <input
                 value={reason}
                 onChange={e => setReason(e.target.value)}
@@ -332,7 +333,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
                   {saving ? 'Saving...' : 'Confirm'}
                 </button>
                 <button
-                  onClick={() => { setReaction(null); setShowReason(false); setVoteDir(null); setReason('') }}
+                  onClick={() => { setShowReason(false); setVoteDir(null); setReason('') }}
                   style={{
                     padding: '6px 14px', borderRadius: 4,
                     border: `1px solid ${OHM.line}`, background: OHM.paper,
@@ -345,7 +346,6 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             </div>
           )}
 
-          {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
             {!done ? (
               !showReason && <>
