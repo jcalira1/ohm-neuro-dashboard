@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 
+// ─── Design tokens ───────────────────────────────────────────────────────────
+
 const OHM = {
   ink:      '#12251A',
   primary:  '#1A3C2B',
@@ -13,6 +15,7 @@ const OHM = {
   lineSoft: '#EEEAE0',
   muted:    '#6B6F67',
   mutedLt:  '#9DA19A',
+  // Category accent palettes
   blueBg:   '#E5ECF4', blueInk:  '#2F4A6B', blueLine: '#CCD7E5',
   roseBg:   '#F3DDDB', roseInk:  '#9A4A44', roseLine: '#E5C6C3',
   sageBg:   '#DBE6CE', sageInk:  '#3E5C22', sageLine: '#C6D7B3',
@@ -56,7 +59,9 @@ const BUBBLES = {
   ],
 }
 
-function weekLabel() {
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getWeekLabel() {
   const now = new Date()
   const start = new Date(now)
   start.setDate(now.getDate() - now.getDay() + 1)
@@ -80,6 +85,8 @@ function groupTopics(topics, grouping) {
   return [{ key: 'all', label: 'All topics', items: topics }]
 }
 
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
 function Logo({ color = OHM.primary, size = 22 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 22 22" fill="none">
@@ -90,7 +97,6 @@ function Logo({ color = OHM.primary, size = 22 }) {
 }
 
 function Sidebar({ batchId, promptVersion, open, onClose }) {
-  const brand = OHM.primary
   const items = [
     { label: 'Intelligence Feed', active: true,  icon: c => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 3h12M1 7h12M1 11h8" stroke={c} strokeWidth="1.6" strokeLinecap="round"/></svg> },
     { label: 'Pipeline',          soon:   true,  icon: c => <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="12" rx="1" stroke={c} strokeWidth="1.4"/><rect x="6" y="1" width="4" height="8" rx="1" stroke={c} strokeWidth="1.4"/><rect x="11" y="1" width="2" height="5" rx="1" stroke={c} strokeWidth="1.4"/></svg> },
@@ -100,45 +106,49 @@ function Sidebar({ batchId, promptVersion, open, onClose }) {
 
   return (
     <>
-      {/* Overlay — mobile only */}
+      {/* Backdrop — mobile only, closes sidebar on tap */}
       {open && (
         <div
           onClick={onClose}
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
-            zIndex: 40, display: 'block',
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            zIndex: 40,
           }}
         />
       )}
 
-      {/* Sidebar drawer */}
       <aside style={{
         width: 230, flexShrink: 0,
         background: OHM.paper,
         borderRight: `1px solid ${OHM.line}`,
         display: 'flex', flexDirection: 'column',
-        minHeight: '100vh',
+        // On desktop: normal flow. On mobile: fixed drawer.
         position: open ? 'fixed' : 'relative',
-        top: 0, left: 0, zIndex: 50,
-        transform: open ? 'translateX(0)' : undefined,
-        // On mobile, hide off-screen when closed
-        ...(typeof window !== 'undefined' && window.innerWidth < 768 && !open
-          ? { position: 'fixed', transform: 'translateX(-100%)', top: 0, left: 0, zIndex: 50 }
-          : {}),
+        top: 0, left: 0,
+        height: open ? '100vh' : 'auto',
+        minHeight: open ? undefined : '100vh',
+        zIndex: 50,
+        overflowY: 'auto',
       }}>
-        {/* Brand + close button */}
+        {/* Brand */}
         <div style={{ padding: '24px 22px 22px', borderBottom: `1px solid ${OHM.lineSoft}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Logo color={brand} size={24}/>
+          <Logo color={OHM.primary} size={24}/>
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 16, letterSpacing: 0.5, fontWeight: 500 }}>OHM NEURO</div>
             <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.muted, marginTop: 2 }}>Intelligence V2</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: OHM.muted, fontSize: 18, lineHeight: 1, padding: 4 }}>✕</button>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: OHM.muted, fontSize: 18, lineHeight: 1, padding: 4 }}
+          >
+            ✕
+          </button>
         </div>
 
         <nav style={{ padding: '14px 12px', flex: 1 }}>
           {items.map(it => {
-            const c = it.active ? brand : OHM.muted
+            const c = it.active ? OHM.primary : OHM.muted
             return (
               <div key={it.label} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
@@ -148,17 +158,32 @@ function Sidebar({ batchId, promptVersion, open, onClose }) {
                 cursor: it.soon ? 'default' : 'pointer',
               }}>
                 <span style={{ color: c, display: 'flex' }}>{it.icon(c)}</span>
-                <span style={{ color: it.active ? OHM.ink : OHM.muted, fontSize: 13, fontWeight: it.active ? 600 : 400, flex: 1 }}>{it.label}</span>
-                {it.soon && <span style={{ fontSize: 9, color: OHM.mutedLt, border: `1px solid ${OHM.line}`, borderRadius: 3, padding: '1px 5px', letterSpacing: 0.6 }}>SOON</span>}
+                <span style={{ color: it.active ? OHM.ink : OHM.muted, fontSize: 13, fontWeight: it.active ? 600 : 400, flex: 1 }}>
+                  {it.label}
+                </span>
+                {it.soon && (
+                  <span style={{ fontSize: 9, color: OHM.mutedLt, border: `1px solid ${OHM.line}`, borderRadius: 3, padding: '1px 5px', letterSpacing: 0.6 }}>
+                    SOON
+                  </span>
+                )}
               </div>
             )
           })}
 
-          <div style={{ margin: '22px 12px 10px', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.mutedLt, fontWeight: 600 }}>This week</div>
+          <div style={{ margin: '22px 12px 10px', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.mutedLt, fontWeight: 600 }}>
+            This week
+          </div>
           <div style={{ padding: '0 12px', fontSize: 12, color: OHM.muted, lineHeight: 1.6 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Batch</span><span style={{ color: OHM.ink, fontFeatureSettings: '"tnum"' }}>{batchId || '—'}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Prompt</span><span style={{ color: OHM.ink }}>{promptVersion || 'v1.1'}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Source</span><span style={{ color: OHM.ink }}>Supabase</span></div>
+            {[
+              ['Batch',   batchId || '—'],
+              ['Prompt',  promptVersion || 'v1.1'],
+              ['Source',  'Supabase'],
+            ].map(([label, value]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{label}</span>
+                <span style={{ color: OHM.ink, fontFeatureSettings: '"tnum"' }}>{value}</span>
+              </div>
+            ))}
           </div>
         </nav>
 
@@ -174,14 +199,17 @@ function Sidebar({ batchId, promptVersion, open, onClose }) {
 }
 
 function ProgressRing({ done, total }) {
-  const r = 14, c = 2 * Math.PI * r
+  const r = 14, circumference = 2 * Math.PI * r
   const pct = total ? done / total : 0
   return (
     <svg width="36" height="36" viewBox="0 0 36 36">
       <circle cx="18" cy="18" r={r} fill="none" stroke={OHM.line} strokeWidth="2.5"/>
       <circle cx="18" cy="18" r={r} fill="none" stroke={OHM.primary} strokeWidth="2.5"
-        strokeDasharray={c} strokeDashoffset={c * (1 - pct)} strokeLinecap="round"
-        transform="rotate(-90 18 18)"/>
+        strokeDasharray={circumference}
+        strokeDashoffset={circumference * (1 - pct)}
+        strokeLinecap="round"
+        transform="rotate(-90 18 18)"
+      />
     </svg>
   )
 }
@@ -194,17 +222,24 @@ function TriageBtn({ children, kind, onClick, disabled }) {
     excl: { bg: OHM.paper,    fg: OHM.roseInk, bd: OHM.roseLine },
   }[kind]
   return (
-    <button onClick={onClick} disabled={disabled} style={{
-      padding: '6px 14px', borderRadius: 4,
-      border: `1px solid ${styles.bd}`,
-      background: styles.bg, color: styles.fg,
-      fontSize: 12, fontWeight: 500, cursor: disabled ? 'wait' : 'pointer',
-      fontFamily: 'inherit', opacity: disabled ? 0.6 : 1,
-    }}>{children}</button>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: '6px 14px', borderRadius: 4,
+        border: `1px solid ${styles.bd}`,
+        background: styles.bg, color: styles.fg,
+        fontSize: 12, fontWeight: 500,
+        cursor: disabled ? 'wait' : 'pointer',
+        fontFamily: 'inherit', opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {children}
+    </button>
   )
 }
 
-function TopicRow({ topic, allTopics, onReact, onUndo }) {
+function TopicRow({ topic, index, onReact, onUndo }) {
   const [reaction, setReaction]        = useState(null)
   const [showPanel, setShowPanel]      = useState(null)  // 'monitor' | 'exclude' | null
   const [voteDir, setVoteDir]          = useState(null)
@@ -221,9 +256,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
   const canConfirm     = showPanel === 'monitor' ? canConfirmMon : canConfirmExcl
 
   function toggleBubble(label) {
-    setSelected(prev =>
-      prev.includes(label) ? prev.filter(b => b !== label) : [...prev, label]
-    )
+    setSelected(prev => prev.includes(label) ? prev.filter(b => b !== label) : [...prev, label])
   }
 
   async function persist(type, vote, bubbles, notesText) {
@@ -233,9 +266,9 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
       ? bubbles.join(', ') + (notesText.trim() ? ' — ' + notesText.trim() : '')
       : notesText.trim()
     const { error } = await supabase.from('reactions').insert({
-      topic_id: topic.id,
-      reaction: type,
-      reason: reasonText || null,
+      topic_id:       topic.id,
+      reaction:       type,
+      reason:         reasonText || null,
       vote_direction: vote,
       prompt_version: 'v1.1',
     })
@@ -250,15 +283,10 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
   function handleExcl() { setShowPanel('exclude'); setSelected([]); setVoteDir(null); setNotes('') }
 
   async function handleConfirm() {
-    if (showPanel === 'monitor') {
-      setReaction('mon')
-      setShowPanel(null)
-      await persist('monitor', voteDir, selectedBubbles, notes)
-    } else {
-      setReaction('excl')
-      setShowPanel(null)
-      await persist('exclude', null, selectedBubbles, notes)
-    }
+    const type = showPanel === 'monitor' ? 'monitor' : 'exclude'
+    setReaction(type === 'monitor' ? 'mon' : 'excl')
+    setShowPanel(null)
+    await persist(type, showPanel === 'monitor' ? voteDir : null, selectedBubbles, notes)
   }
 
   function handleCancel() {
@@ -278,12 +306,17 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
     onUndo()
   }
 
-  const reactionLabel = reaction === 'full' ? '✓ Draft' : reaction === 'supp' ? '✓ Support' : reaction === 'excl' ? '✗ No' : '◦ Monitoring'
-  const reactionColor = reaction === 'excl' ? OHM.roseInk : reaction === 'mon' ? OHM.roseInk : OHM.primary
+  const reactionLabel = { full: '✓ Draft', supp: '✓ Support', excl: '✗ No', mon: '◦ Monitoring' }[reaction]
+  const reactionColor = (reaction === 'excl' || reaction === 'mon') ? OHM.roseInk : OHM.primary
 
   const upActive   = { border: OHM.primary, bg: OHM.sage,   color: OHM.primary }
   const downActive = { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
   const inactive   = { border: OHM.line,    bg: OHM.paper,  color: OHM.muted   }
+
+  const bubbleList = showPanel === 'exclude' ? BUBBLES.exclude : (voteDir ? BUBBLES[voteDir] : [])
+  const activeStyle = (showPanel === 'exclude' || voteDir === 'down')
+    ? { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
+    : { border: OHM.primary,  bg: OHM.sage,   color: OHM.primary }
 
   return (
     <article style={{
@@ -294,16 +327,19 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
 
+        {/* Row number */}
         <div style={{
           fontFamily: '"Source Serif 4", Georgia, serif',
-          fontSize: 26, color: OHM.mutedLt, width: 36, fontWeight: 400,
-          fontFeatureSettings: '"tnum"', lineHeight: 1, flexShrink: 0,
+          fontSize: 26, color: OHM.mutedLt, width: 36,
+          fontWeight: 400, fontFeatureSettings: '"tnum"',
+          lineHeight: 1, flexShrink: 0,
         }}>
-          {String((allTopics.indexOf(topic) + 1)).padStart(2, '0')}
+          {String(index + 1).padStart(2, '0')}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
 
+          {/* Meta row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
             {topic.category && (
               <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', padding: '2px 8px', borderRadius: 3, background: cat.bg, color: cat.ink, border: `1px solid ${cat.line}` }}>
@@ -312,18 +348,23 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             )}
             <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
             <span style={{ fontSize: 11, color: OHM.muted }}>{topic.status}</span>
-            {topic.batch_id && <>
-              <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
-              <span style={{ fontSize: 11, color: OHM.muted, fontFeatureSettings: '"tnum"' }}>{topic.batch_id}</span>
-            </>}
+            {topic.batch_id && (
+              <>
+                <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
+                <span style={{ fontSize: 11, color: OHM.muted, fontFeatureSettings: '"tnum"' }}>{topic.batch_id}</span>
+              </>
+            )}
             {done && (
               <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: reactionColor }}>
                 {reactionLabel}
               </span>
             )}
-            {saveError && <span style={{ fontSize: 11, color: OHM.roseInk, marginLeft: 'auto' }}>{saveError}</span>}
+            {saveError && (
+              <span style={{ fontSize: 11, color: OHM.roseInk, marginLeft: 'auto' }}>{saveError}</span>
+            )}
           </div>
 
+          {/* Title */}
           <h2 style={{
             fontFamily: '"Source Serif 4", Georgia, serif',
             fontSize: 21, fontWeight: 400, margin: '0 0 8px 0',
@@ -332,13 +373,15 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             {topic.title}
           </h2>
 
+          {/* Research brief */}
           {topic.research_brief && (
             <p style={{ fontSize: 13.5, color: OHM.muted, margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
               {topic.research_brief}
             </p>
           )}
 
-          {topic.signals && Array.isArray(topic.signals) && topic.signals.length > 0 && (
+          {/* Signal tags */}
+          {topic.signals?.length > 0 && (
             <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
               {topic.signals.map(s => (
                 <span key={s} style={{ fontSize: 10.5, color: OHM.muted, padding: '2px 8px', border: `1px solid ${OHM.line}`, borderRadius: 99, background: OHM.paper, letterSpacing: 0.1 }}>
@@ -348,11 +391,11 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
             </div>
           )}
 
-          {/* ── Monitor / Exclude panel ── */}
+          {/* Monitor / Exclude panel */}
           {showPanel && (
             <div style={{ marginTop: 14, padding: '16px 18px', borderRadius: 8, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
 
-              {/* Vote direction — Monitor only */}
+              {/* Signal direction — Monitor only */}
               {showPanel === 'monitor' && (
                 <>
                   <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
@@ -383,18 +426,15 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
                 </>
               )}
 
-              {/* Reason bubbles — show immediately for Exclude, after vote pick for Monitor */}
+              {/* Reason bubbles */}
               {(showPanel === 'exclude' || (showPanel === 'monitor' && voteDir)) && (
                 <>
                   <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
                     {showPanel === 'exclude' ? 'Why this is a No' : voteDir === 'up' ? 'Why it is worth watching' : 'Why it is low priority'}
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-                    {(showPanel === 'exclude' ? BUBBLES.exclude : BUBBLES[voteDir]).map(label => {
+                    {bubbleList.map(label => {
                       const active = selectedBubbles.includes(label)
-                      const activeStyle = showPanel === 'exclude' || voteDir === 'down'
-                        ? { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
-                        : { border: OHM.primary,  bg: OHM.sage,   color: OHM.primary }
                       const s = active ? activeStyle : { border: OHM.line, bg: OHM.paper, color: OHM.muted }
                       return (
                         <button
@@ -402,7 +442,8 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
                           onClick={() => toggleBubble(label)}
                           style={{
                             padding: '5px 12px', borderRadius: 99, fontSize: 12,
-                            fontFamily: 'inherit', cursor: 'pointer', fontWeight: active ? 500 : 400,
+                            fontFamily: 'inherit', cursor: 'pointer',
+                            fontWeight: active ? 500 : 400,
                             border: `1px solid ${s.border}`,
                             background: s.bg, color: s.color,
                           }}
@@ -413,10 +454,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
                     })}
                   </div>
 
-                  {/* Optional notes */}
-                  <div style={{ fontSize: 11, color: OHM.mutedLt, marginBottom: 6 }}>
-                    Additional notes (optional)
-                  </div>
+                  <div style={{ fontSize: 11, color: OHM.mutedLt, marginBottom: 6 }}>Additional notes (optional)</div>
                   <textarea
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
@@ -434,7 +472,7 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
               )}
 
               {/* Confirm / Cancel */}
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button
                   onClick={handleConfirm}
                   disabled={!canConfirm || saving}
@@ -460,28 +498,32 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
                   Cancel
                 </button>
                 {!canConfirm && (showPanel === 'exclude' || voteDir) && (
-                  <div style={{ fontSize: 11, color: OHM.mutedLt, width: '100%', marginTop: 8 }}>
+                  <div style={{ fontSize: 11, color: OHM.mutedLt, width: '100%', marginTop: 4 }}>
                     Select a reason to confirm.
                   </div>
                 )}
               </div>
-
             </div>
           )}
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            {!done ? (
-              !showPanel && <>
-                <TriageBtn kind="full" onClick={handleFull} disabled={saving}>Draft</TriageBtn>
-                <TriageBtn kind="supp" onClick={handleSupp} disabled={saving}>Support</TriageBtn>
-                <TriageBtn kind="mon"  onClick={handleMon}  disabled={saving}>Monitor</TriageBtn>
-                <TriageBtn kind="excl" onClick={handleExcl} disabled={saving}>Exclude</TriageBtn>
-              </>
-            ) : (
-              <button onClick={handleUndo} style={{ fontSize: 12, color: OHM.muted, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
+            {done ? (
+              <button
+                onClick={handleUndo}
+                style={{ fontSize: 12, color: OHM.muted, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}
+              >
                 Undo
               </button>
+            ) : (
+              !showPanel && (
+                <>
+                  <TriageBtn kind="full" onClick={handleFull} disabled={saving}>Draft</TriageBtn>
+                  <TriageBtn kind="supp" onClick={handleSupp} disabled={saving}>Support</TriageBtn>
+                  <TriageBtn kind="mon"  onClick={handleMon}  disabled={saving}>Monitor</TriageBtn>
+                  <TriageBtn kind="excl" onClick={handleExcl} disabled={saving}>Exclude</TriageBtn>
+                </>
+              )
             )}
           </div>
 
@@ -491,18 +533,22 @@ function TopicRow({ topic, allTopics, onReact, onUndo }) {
   )
 }
 
+// ─── Root ─────────────────────────────────────────────────────────────────────
+
+const WEEK_LABEL = getWeekLabel()
+
 export default function App() {
   const [topics,       setTopics]       = useState([])
   const [loading,      setLoading]      = useState(true)
   const [reactedCount, setReactedCount] = useState(0)
   const [grouping,     setGrouping]     = useState('none')
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
   useEffect(() => {
     async function fetchTopics() {
       const { data, error } = await supabase
-        .from('topics').select('*')
+        .from('topics')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(10)
       if (error) console.error('Supabase error:', error)
@@ -515,6 +561,13 @@ export default function App() {
   const batchId = topics.find(t => t.batch_id)?.batch_id
   const groups  = groupTopics(topics, grouping)
 
+  const statCounts = [
+    ['Topics',     topics.length,                                                        OHM.primary],
+    ['Researching',topics.filter(t => t.status === 'Researching').length,                OHM.blueInk],
+    ['Drafting',   topics.filter(t => ['Drafting','Editing'].includes(t.status)).length, OHM.roseInk],
+    ['Remaining',  topics.length - reactedCount,                                         OHM.muted],
+  ]
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'Inter, system-ui, sans-serif', background: OHM.paper, color: OHM.ink }}>
 
@@ -525,50 +578,41 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
       />
 
-      {/* Floating menu button — always visible when sidebar is closed */}
-      {!sidebarOpen && (
-        <button
-          onClick={() => setSidebarOpen(true)}
-          style={{
-            position: 'fixed', bottom: 24, right: 24, zIndex: 30,
-            width: 48, height: 48, borderRadius: '50%',
-            background: OHM.primary, border: 'none',
-            cursor: 'pointer', display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', gap: 4,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
-          }}
-        >
-          <span style={{ display: 'block', width: 18, height: 1.5, background: '#fff' }}/>
-          <span style={{ display: 'block', width: 18, height: 1.5, background: '#fff' }}/>
-          <span style={{ display: 'block', width: 18, height: 1.5, background: '#fff' }}/>
-        </button>
-      )}
-
       <main style={{ flex: 1, minWidth: 0, background: OHM.paper }}>
 
-        <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: '16px 20px 16px', background: OHM.paper }}>
-          {/* Hamburger row */}
+        {/* Header */}
+        <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: '16px 20px', background: OHM.paper }}>
+
+          {/* Top bar with hamburger */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
             <button
               onClick={() => setSidebarOpen(true)}
               style={{ background: 'none', border: `1px solid ${OHM.line}`, borderRadius: 6, cursor: 'pointer', padding: '6px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}
+              aria-label="Open navigation"
             >
               <span style={{ display: 'block', width: 16, height: 1.5, background: OHM.primary }}/>
               <span style={{ display: 'block', width: 16, height: 1.5, background: OHM.primary }}/>
               <span style={{ display: 'block', width: 16, height: 1.5, background: OHM.primary }}/>
             </button>
-            <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 14, color: OHM.muted }}>OHM NEURO</div>
+            <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 14, color: OHM.muted }}>
+              OHM NEURO
+            </div>
           </div>
+
+          {/* Title row */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 10.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 8 }}>
-                Intelligence Feed · Week of {weekLabel().split(',')[0]}
+                Intelligence Feed · Week of {WEEK_LABEL.split(',')[0]}
               </div>
               <h1 style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 36, fontWeight: 400, margin: 0, letterSpacing: -0.6, lineHeight: 1.05 }}>
                 This week's signal.
               </h1>
               <div style={{ fontSize: 13, color: OHM.muted, marginTop: 8, maxWidth: 560, lineHeight: 1.55 }}>
-                {loading ? 'Loading topics...' : `${topics.length} topics from Supabase. Decide what becomes a draft, supporting link, or monitor.`}
+                {loading
+                  ? 'Loading topics...'
+                  : `${topics.length} topics from Supabase. Decide what becomes a draft, supporting link, or monitor.`
+                }
               </div>
             </div>
 
@@ -578,49 +622,60 @@ export default function App() {
                 <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 22, color: OHM.ink, lineHeight: 1 }}>
                   {reactedCount}<span style={{ color: OHM.mutedLt, fontSize: 16 }}> / {topics.length}</span>
                 </div>
-                <div style={{ fontSize: 10.5, color: OHM.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>Reviewed</div>
+                <div style={{ fontSize: 10.5, color: OHM.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4 }}>
+                  Reviewed
+                </div>
               </div>
             </div>
           </div>
 
+          {/* Stats grid */}
           {!loading && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 1, background: OHM.line, borderRadius: 6, overflow: 'hidden', border: `1px solid ${OHM.line}`, marginTop: 22 }}>
-              {[
-                ['Topics',     topics.length,                                                        OHM.primary],
-                ['Researching',topics.filter(t => t.status === 'Researching').length,                OHM.blueInk],
-                ['Drafting',   topics.filter(t => ['Drafting','Editing'].includes(t.status)).length, OHM.roseInk],
-                ['Remaining',  topics.length - reactedCount,                                         OHM.muted],
-              ].map(([l, v, c]) => (
-                <div key={l} style={{ background: OHM.paper, padding: '12px 16px' }}>
-                  <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 26, fontWeight: 400, color: c, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>{v}</div>
-                  <div style={{ fontSize: 10.5, color: OHM.muted, letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: 5 }}>{l}</div>
+              {statCounts.map(([label, value, color]) => (
+                <div key={label} style={{ background: OHM.paper, padding: '12px 16px' }}>
+                  <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 26, fontWeight: 400, color, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>
+                    {value}
+                  </div>
+                  <div style={{ fontSize: 10.5, color: OHM.muted, letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: 5 }}>
+                    {label}
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
 
+        {/* Feed */}
         <div style={{ padding: '28px 44px 80px', maxWidth: 900 }}>
 
+          {/* Group by controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <span style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em' }}>Group by</span>
-            {['none','category','status'].map(g => (
+            {['none', 'category', 'status'].map(g => (
               <button key={g} onClick={() => setGrouping(g)} style={{
                 padding: '4px 10px', borderRadius: 4, fontSize: 11,
                 border: `1px solid ${grouping === g ? OHM.primary : OHM.line}`,
                 background: grouping === g ? OHM.primary : OHM.paper,
                 color: grouping === g ? '#fff' : OHM.muted,
                 cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize',
-              }}>{g === 'none' ? 'None' : g}</button>
+              }}>
+                {g === 'none' ? 'None' : g}
+              </button>
             ))}
           </div>
 
           {loading && (
-            <div style={{ padding: '40px 0', color: OHM.muted, fontSize: 14 }}>Loading this week's signal...</div>
+            <div style={{ padding: '40px 0', color: OHM.muted, fontSize: 14 }}>
+              Loading this week's signal...
+            </div>
           )}
+
           {!loading && topics.length === 0 && (
             <div style={{ padding: '32px', borderRadius: 8, background: OHM.sage, border: `1px solid ${OHM.sageDeep}` }}>
-              <p style={{ color: OHM.primary, fontSize: 14, margin: 0 }}>No topics found. Add rows to your Supabase <code>topics</code> table.</p>
+              <p style={{ color: OHM.primary, fontSize: 14, margin: 0 }}>
+                No topics found. Add rows to your Supabase <code>topics</code> table.
+              </p>
             </div>
           )}
 
@@ -628,18 +683,20 @@ export default function App() {
             <section key={key} style={{ marginBottom: 28 }}>
               {grouping !== 'none' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, marginTop: 16 }}>
-                  <span style={{ fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: OHM.muted, fontWeight: 700 }}>{label}</span>
+                  <span style={{ fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: OHM.muted, fontWeight: 700 }}>
+                    {label}
+                  </span>
                   <span style={{ fontSize: 11, color: OHM.mutedLt, fontFeatureSettings: '"tnum"' }}>· {items.length}</span>
                   <div style={{ flex: 1, height: 1, background: OHM.lineSoft }}/>
                 </div>
               )}
-              {items.map(topic => (
+              {items.map((topic, i) => (
                 <TopicRow
                   key={topic.id}
                   topic={topic}
-                  allTopics={topics}
-                  onReact={()  => setReactedCount(c => c + 1)}
-                  onUndo={()   => setReactedCount(c => Math.max(0, c - 1))}
+                  index={i}
+                  onReact={() => setReactedCount(c => c + 1)}
+                  onUndo={()  => setReactedCount(c => Math.max(0, c - 1))}
                 />
               ))}
             </section>
