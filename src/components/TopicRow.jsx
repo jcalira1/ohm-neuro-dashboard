@@ -1,11 +1,281 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../supabase'
 import { OHM, CAT_STYLE } from '../tokens'
 import { BUBBLES, SHARED_FOLDER_URL } from '../constants'
 import { fireAppsScript, pollForDocUrl } from '../utils/helpers'
 import TriageBtn from './TriageBtn'
 
-// ─── Internal sub-components ─────────────────────────────────────────────────
+// ─── Topic Detail Modal ───────────────────────────────────────────────────────
+
+function TopicModal({ topic, reaction, onClose }) {
+  const cat = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
+
+  const REACTION_LABEL = {
+    full: '✓ Draft queued',
+    supp: '✓ Added as Support',
+    excl: '✗ Excluded',
+    mon:  '◦ Monitoring',
+  }
+
+  // Close on Escape key
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  // Lock body scroll while open
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
+  return createPortal(
+    <>
+      {/* ── Backdrop ── */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(12, 24, 18, 0.55)',
+          backdropFilter: 'blur(3px)',
+          WebkitBackdropFilter: 'blur(3px)',
+          zIndex: 200,
+          animation: 'fadeIn 0.18s ease',
+        }}
+      />
+
+      {/* ── Panel ── */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: 'fixed',
+          top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 'min(680px, calc(100vw - 40px))',
+          maxHeight: 'calc(100vh - 80px)',
+          overflowY: 'auto',
+          background: OHM.paper,
+          borderRadius: 12,
+          border: `1px solid ${OHM.line}`,
+          boxShadow: '0 24px 64px rgba(12,24,18,0.18), 0 4px 16px rgba(12,24,18,0.08)',
+          zIndex: 201,
+          animation: 'slideUp 0.22s ease',
+        }}
+      >
+        {/* ── Modal header ── */}
+        <div style={{
+          padding: '24px 28px 20px',
+          borderBottom: `1px solid ${OHM.lineSoft}`,
+          position: 'sticky', top: 0,
+          background: OHM.paper,
+          zIndex: 1,
+          display: 'flex', alignItems: 'flex-start', gap: 16,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Category + status badges */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+              {topic.category && (
+                <span style={{
+                  fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em',
+                  padding: '2px 8px', borderRadius: 3,
+                  background: cat.bg, color: cat.ink, border: `1px solid ${cat.line}`,
+                }}>
+                  {topic.category}
+                </span>
+              )}
+              <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
+              <span style={{ fontSize: 11, color: OHM.muted }}>{topic.status}</span>
+              {topic.batch_id && (
+                <>
+                  <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
+                  <span style={{ fontSize: 11, color: OHM.muted, fontFeatureSettings: '"tnum"' }}>{topic.batch_id}</span>
+                </>
+              )}
+            </div>
+
+            {/* Title */}
+            <h2 style={{
+              fontFamily: '"Source Serif 4", Georgia, serif',
+              fontSize: 24, fontWeight: 400,
+              margin: 0, letterSpacing: -0.4, lineHeight: 1.2,
+              color: OHM.ink,
+            }}>
+              {topic.title}
+            </h2>
+          </div>
+
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              flexShrink: 0,
+              width: 32, height: 32,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'none',
+              border: `1px solid ${OHM.line}`,
+              borderRadius: 6,
+              cursor: 'pointer',
+              color: OHM.muted,
+              fontSize: 16,
+              lineHeight: 1,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* ── Modal body ── */}
+        <div style={{ padding: '24px 28px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+          {/* Full research brief */}
+          <section>
+            <div style={modalLabel}>Research Brief</div>
+            <p style={{ fontSize: 14.5, color: OHM.ink, lineHeight: 1.75, margin: 0 }}>
+              {topic.research_brief || '—'}
+            </p>
+          </section>
+
+          <div style={modalDivider} />
+
+          {/* Signal tags */}
+          {topic.signals?.length > 0 && (
+            <>
+              <section>
+                <div style={modalLabel}>Signals</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {topic.signals.map(s => (
+                    <span key={s} style={{
+                      fontSize: 11, color: OHM.muted,
+                      padding: '3px 10px',
+                      border: `1px solid ${OHM.line}`,
+                      borderRadius: 99, background: OHM.paper,
+                    }}>
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </section>
+              <div style={modalDivider} />
+            </>
+          )}
+
+          {/* Source URL */}
+          <section>
+            <div style={modalLabel}>Source</div>
+            {topic.source_url ? (
+              <a
+                href={topic.source_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 12, color: OHM.blueInk,
+                  padding: '6px 14px', borderRadius: 4,
+                  border: `1px solid ${OHM.blueLine}`,
+                  background: OHM.blueBg,
+                  textDecoration: 'none',
+                  fontWeight: 500,
+                }}
+              >
+                Open source →
+              </a>
+            ) : (
+              <span style={{ fontSize: 13, color: OHM.mutedLt }}>No source URL saved yet</span>
+            )}
+          </section>
+
+          <div style={modalDivider} />
+
+          {/* Reaction + Doc status */}
+          <section>
+            <div style={modalLabel}>Status this session</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {reaction ? (
+                <span style={{
+                  fontSize: 12, fontWeight: 600,
+                  color: (reaction === 'excl' || reaction === 'mon') ? OHM.roseInk : OHM.primary,
+                  padding: '4px 12px', borderRadius: 4,
+                  background: (reaction === 'excl' || reaction === 'mon') ? OHM.roseBg : OHM.sage,
+                  border: `1px solid ${(reaction === 'excl' || reaction === 'mon') ? OHM.roseLine : OHM.sageDeep}`,
+                }}>
+                  {REACTION_LABEL[reaction]}
+                </span>
+              ) : (
+                <span style={{ fontSize: 13, color: OHM.mutedLt }}>Not yet triaged</span>
+              )}
+
+              {topic.draft_doc_url && (
+                <a
+                  href={topic.draft_doc_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontSize: 12, color: OHM.primary, fontWeight: 500,
+                    padding: '5px 12px', borderRadius: 4,
+                    border: `1px solid ${OHM.sageDeep}`,
+                    background: OHM.sage,
+                    textDecoration: 'none',
+                  }}
+                >
+                  Open Draft Doc →
+                </a>
+              )}
+            </div>
+          </section>
+
+          <div style={modalDivider} />
+
+          {/* Linked support articles — placeholder */}
+          <section>
+            <div style={modalLabel}>Linked Support Articles</div>
+            <div style={{
+              padding: '12px 16px', borderRadius: 6,
+              background: OHM.sage, border: `1px solid ${OHM.sageDeep}`,
+              fontSize: 12, color: OHM.primary, lineHeight: 1.6,
+            }}>
+              ↗ Linked support articles will appear here once Support Tagging is live.
+            </div>
+          </section>
+
+        </div>
+      </div>
+
+      {/* Keyframe animations */}
+      <style>{`
+        @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translate(-50%, calc(-50% + 16px)) }
+          to   { opacity: 1; transform: translate(-50%, -50%) }
+        }
+      `}</style>
+    </>,
+    document.body
+  )
+}
+
+// ── Shared modal style tokens ─────────────────────────────────────────────────
+
+const modalLabel = {
+  fontSize: 10.5,
+  letterSpacing: '0.16em',
+  textTransform: 'uppercase',
+  color: OHM.primary,
+  fontWeight: 700,
+  marginBottom: 10,
+}
+
+const modalDivider = {
+  height: 1,
+  background: OHM.lineSoft,
+}
+
+// ─── DraftPanel ───────────────────────────────────────────────────────────────
 
 function DraftPanel({ topic, onSent, onCancel }) {
   const [draftNotes, setDraftNotes] = useState('')
@@ -43,7 +313,6 @@ function DraftPanel({ topic, onSent, onCancel }) {
         setSaving(false)
         return
       }
-
       fireAppsScript({
         title:    topic.title,
         brief:    topic.research_brief || '',
@@ -53,9 +322,7 @@ function DraftPanel({ topic, onSent, onCancel }) {
         category: topic.category || '',
         batch_id: topic.batch_id || '',
       })
-
       onSent('docs')
-
       const url = await pollForDocUrl(topic.id)
       window.open(url || SHARED_FOLDER_URL, '_blank')
     } catch {
@@ -75,7 +342,6 @@ function DraftPanel({ topic, onSent, onCancel }) {
       </div>
       <div style={{ fontSize: 12, color: OHM.mutedLt, marginBottom: 10 }}>{topic.title}</div>
       <div style={{ fontSize: 11, color: OHM.muted, marginBottom: 6 }}>What points do you want to make?</div>
-
       <textarea
         value={draftNotes}
         onChange={e => setDraftNotes(e.target.value)}
@@ -92,7 +358,6 @@ function DraftPanel({ topic, onSent, onCancel }) {
           color: OHM.ink, lineHeight: 1.6,
         }}
       />
-
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           onClick={handleSendToDocs}
@@ -108,7 +373,6 @@ function DraftPanel({ topic, onSent, onCancel }) {
         >
           {saving ? 'Creating...' : 'Send to Docs →'}
         </button>
-
         <button
           onClick={handleSaveForLater}
           disabled={saving}
@@ -123,19 +387,19 @@ function DraftPanel({ topic, onSent, onCancel }) {
         >
           Save for later
         </button>
-
         <button
           onClick={onCancel}
           style={{ fontSize: 12, color: OHM.mutedLt, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginLeft: 4 }}
         >
           Cancel
         </button>
-
         {saveError && <span style={{ fontSize: 11, color: OHM.roseInk }}>{saveError}</span>}
       </div>
     </div>
   )
 }
+
+// ─── TriagePanel ──────────────────────────────────────────────────────────────
 
 function TriagePanel({ kind, onConfirm, onCancel }) {
   const [voteDir,  setVoteDir]  = useState(null)
@@ -145,8 +409,8 @@ function TriagePanel({ kind, onConfirm, onCancel }) {
 
   const isMonitor = kind === 'monitor'
 
-  function toggleBubble(label) {
-    setSelected(prev => prev.includes(label) ? prev.filter(b => b !== label) : [...prev, label])
+  function toggleBubble(lbl) {
+    setSelected(prev => prev.includes(lbl) ? prev.filter(b => b !== lbl) : [...prev, lbl])
   }
 
   const canConfirm = isMonitor
@@ -175,8 +439,6 @@ function TriagePanel({ kind, onConfirm, onCancel }) {
       borderRadius: 8, border: `1px solid ${OHM.line}`,
       background: OHM.cream,
     }}>
-
-      {/* Monitor: signal strength toggle */}
       {isMonitor && (
         <>
           <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
@@ -201,28 +463,26 @@ function TriagePanel({ kind, onConfirm, onCancel }) {
         </>
       )}
 
-      {/* Reason bubbles */}
       {(!isMonitor || voteDir) && (
         <>
           <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
             {!isMonitor ? 'Why this is a No' : voteDir === 'up' ? 'Why it is worth watching' : 'Why it is low priority'}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-            {bubbleList.map(label => {
-              const active = selected.includes(label)
+            {bubbleList.map(lbl => {
+              const active = selected.includes(lbl)
               const s = active ? activeStyle : inactive
               return (
                 <button
-                  key={label}
-                  onClick={() => toggleBubble(label)}
+                  key={lbl}
+                  onClick={() => toggleBubble(lbl)}
                   style={{ padding: '5px 12px', borderRadius: 99, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', fontWeight: active ? 500 : 400, border: `1px solid ${s.border}`, background: s.bg, color: s.color }}
                 >
-                  {label}
+                  {lbl}
                 </button>
               )
             })}
           </div>
-
           <div style={{ fontSize: 11, color: OHM.mutedLt, marginBottom: 6 }}>Additional notes (optional)</div>
           <textarea
             value={notes}
@@ -255,14 +515,12 @@ function TriagePanel({ kind, onConfirm, onCancel }) {
         >
           {saving ? 'Saving...' : 'Confirm'}
         </button>
-
         <button
           onClick={onCancel}
           style={{ padding: '6px 16px', borderRadius: 4, border: `1px solid ${OHM.line}`, background: OHM.paper, color: OHM.muted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
         >
           Cancel
         </button>
-
         {!canConfirm && ((!isMonitor) || voteDir) && (
           <div style={{ fontSize: 11, color: OHM.mutedLt, width: '100%', marginTop: 4 }}>
             Select a reason to confirm.
@@ -271,139 +529,6 @@ function TriagePanel({ kind, onConfirm, onCancel }) {
       </div>
     </div>
   )
-}
-
-// ─── Expanded detail panel ────────────────────────────────────────────────────
-
-function ExpandedDetail({ topic, reaction }) {
-  const REACTION_LABEL = {
-    full: '✓ Draft queued',
-    supp: '✓ Added as Support',
-    excl: '✗ Excluded',
-    mon:  '◦ Monitoring',
-  }
-
-  return (
-    <div style={{
-      marginTop: 16,
-      padding: '20px 22px',
-      borderRadius: 8,
-      border: `1px solid ${OHM.sageDeep}`,
-      background: OHM.cream,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 20,
-    }}>
-
-      {/* ── Full research brief ── */}
-      <div>
-        <div style={sectionLabel}>Research Brief</div>
-        <p style={{
-          fontSize: 14, color: OHM.ink, lineHeight: 1.75,
-          margin: 0, maxWidth: 660,
-        }}>
-          {topic.research_brief || '—'}
-        </p>
-      </div>
-
-      <div style={{ height: 1, background: OHM.lineSoft }} />
-
-      {/* ── Source URL ── */}
-      <div>
-        <div style={sectionLabel}>Source</div>
-        {topic.source_url ? (
-          <a
-            href={topic.source_url}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              fontSize: 12, color: OHM.blueInk,
-              padding: '6px 14px', borderRadius: 4,
-              border: `1px solid ${OHM.blueLine}`,
-              background: OHM.blueBg,
-              textDecoration: 'none',
-              fontWeight: 500,
-            }}
-          >
-            Open source →
-          </a>
-        ) : (
-          <span style={{ fontSize: 13, color: OHM.mutedLt }}>No source URL saved</span>
-        )}
-      </div>
-
-      <div style={{ height: 1, background: OHM.lineSoft }} />
-
-      {/* ── Reaction / Doc status ── */}
-      <div>
-        <div style={sectionLabel}>Status this session</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {reaction ? (
-            <span style={{
-              fontSize: 12, fontWeight: 600,
-              color: (reaction === 'excl' || reaction === 'mon') ? OHM.roseInk : OHM.primary,
-              padding: '4px 10px', borderRadius: 4,
-              background: (reaction === 'excl' || reaction === 'mon') ? OHM.roseBg : OHM.sage,
-              border: `1px solid ${(reaction === 'excl' || reaction === 'mon') ? OHM.roseLine : OHM.sageDeep}`,
-            }}>
-              {REACTION_LABEL[reaction]}
-            </span>
-          ) : (
-            <span style={{ fontSize: 13, color: OHM.mutedLt }}>Not yet triaged</span>
-          )}
-
-          {topic.draft_doc_url && (
-            <a
-              href={topic.draft_doc_url}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                fontSize: 12, color: OHM.primary,
-                padding: '5px 12px', borderRadius: 4,
-                border: `1px solid ${OHM.sageDeep}`,
-                background: OHM.sage,
-                textDecoration: 'none',
-                fontWeight: 500,
-              }}
-            >
-              Open Draft Doc →
-            </a>
-          )}
-        </div>
-      </div>
-
-      <div style={{ height: 1, background: OHM.lineSoft }} />
-
-      {/* ── Linked Support articles placeholder ── */}
-      <div>
-        <div style={sectionLabel}>Linked Support Articles</div>
-        <div style={{
-          padding: '10px 14px',
-          borderRadius: 6,
-          background: OHM.sage,
-          border: `1px solid ${OHM.sageDeep}`,
-          fontSize: 12,
-          color: OHM.primary,
-          lineHeight: 1.55,
-        }}>
-          ↗ Linked support articles will appear here once Support Tagging is live.
-        </div>
-      </div>
-
-    </div>
-  )
-}
-
-// shared label style used inside ExpandedDetail
-const sectionLabel = {
-  fontSize: 10.5,
-  letterSpacing: '0.16em',
-  textTransform: 'uppercase',
-  color: OHM.primary,
-  fontWeight: 700,
-  marginBottom: 8,
 }
 
 // ─── TopicRow ─────────────────────────────────────────────────────────────────
@@ -416,20 +541,19 @@ const REACTION_LABEL = {
 }
 
 export default function TopicRow({ topic, index, onReact, onUndo }) {
-  const [reaction,       setReaction]       = useState(null)
-  const [activePanel,    setActivePanel]    = useState(null)   // 'draft' | 'monitor' | 'exclude'
-  const [expanded,       setExpanded]       = useState(false)
-  const [saving,         setSaving]         = useState(false)
-  const [saveError,      setSaveError]      = useState(null)
+  const [reaction,    setReaction]    = useState(null)
+  const [activePanel, setActivePanel] = useState(null)  // 'draft' | 'monitor' | 'exclude'
+  const [modalOpen,   setModalOpen]   = useState(false)
+  const [saving,      setSaving]      = useState(false)
+  const [saveError,   setSaveError]   = useState(null)
 
   const cat  = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
   const done = !!reaction
   const reactionColor = (reaction === 'excl' || reaction === 'mon') ? OHM.roseInk : OHM.primary
 
-  // Truncate brief when collapsed
   const BRIEF_LIMIT = 160
   const briefText = topic.research_brief || ''
-  const briefCollapsed = briefText.length > BRIEF_LIMIT
+  const briefPreview = briefText.length > BRIEF_LIMIT
     ? briefText.slice(0, BRIEF_LIMIT) + '…'
     : briefText
 
@@ -497,148 +621,162 @@ export default function TopicRow({ topic, index, onReact, onUndo }) {
   }
 
   return (
-    <article style={{
-      padding: '22px 0',
-      borderTop: `1px solid ${OHM.lineSoft}`,
-      opacity: done ? 0.55 : 1,
-      transition: 'opacity .2s',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
+    <>
+      <article style={{
+        padding: '22px 0',
+        borderTop: `1px solid ${OHM.lineSoft}`,
+        opacity: done ? 0.55 : 1,
+        transition: 'opacity .2s',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
 
-        {/* Index number */}
-        <div style={{
-          fontFamily: '"Source Serif 4", Georgia, serif',
-          fontSize: 26, color: OHM.mutedLt, width: 36,
-          fontWeight: 400, fontFeatureSettings: '"tnum"',
-          lineHeight: 1, flexShrink: 0,
-        }}>
-          {String(index + 1).padStart(2, '0')}
-        </div>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-
-          {/* ── Meta row ── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-            {topic.category && (
-              <span style={{
-                fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em',
-                padding: '2px 8px', borderRadius: 3,
-                background: cat.bg, color: cat.ink, border: `1px solid ${cat.line}`,
-              }}>
-                {topic.category}
-              </span>
-            )}
-            <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
-            <span style={{ fontSize: 11, color: OHM.muted }}>{topic.status}</span>
-            {topic.batch_id && (
-              <>
-                <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
-                <span style={{ fontSize: 11, color: OHM.muted, fontFeatureSettings: '"tnum"' }}>{topic.batch_id}</span>
-              </>
-            )}
-            {done && (
-              <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: reactionColor }}>
-                {REACTION_LABEL[reaction]}
-              </span>
-            )}
+          {/* Index number */}
+          <div style={{
+            fontFamily: '"Source Serif 4", Georgia, serif',
+            fontSize: 26, color: OHM.mutedLt, width: 36,
+            fontWeight: 400, fontFeatureSettings: '"tnum"',
+            lineHeight: 1, flexShrink: 0,
+          }}>
+            {String(index + 1).padStart(2, '0')}
           </div>
 
-          {/* ── Title — click to expand ── */}
-          <h2
-            onClick={() => setExpanded(e => !e)}
-            style={{
-              fontFamily: '"Source Serif 4", Georgia, serif',
-              fontSize: 21, fontWeight: 400, margin: '0 0 8px 0',
-              letterSpacing: -0.3, lineHeight: 1.25, color: OHM.ink,
-              cursor: 'pointer',
-              display: 'flex', alignItems: 'flex-start', gap: 8,
-            }}
-          >
-            <span style={{ flex: 1 }}>{topic.title}</span>
-            <span style={{
-              fontSize: 12, color: OHM.mutedLt,
-              marginTop: 4, flexShrink: 0,
-              transition: 'transform 0.2s',
-              display: 'inline-block',
-              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-            }}>
-              ▾
-            </span>
-          </h2>
+          <div style={{ flex: 1, minWidth: 0 }}>
 
-          {/* ── Brief (collapsed — truncated) ── */}
-          {!expanded && briefText && (
-            <p style={{ fontSize: 13.5, color: OHM.muted, margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
-              {briefCollapsed}
-            </p>
-          )}
-
-          {/* ── Signal tags ── */}
-          {!expanded && topic.signals?.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-              {topic.signals.map(s => (
-                <span key={s} style={{
-                  fontSize: 10.5, color: OHM.muted,
-                  padding: '2px 8px', border: `1px solid ${OHM.line}`,
-                  borderRadius: 99, background: OHM.paper, letterSpacing: 0.1,
+            {/* Meta row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              {topic.category && (
+                <span style={{
+                  fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em',
+                  padding: '2px 8px', borderRadius: 3,
+                  background: cat.bg, color: cat.ink, border: `1px solid ${cat.line}`,
                 }}>
-                  o {s}
+                  {topic.category}
                 </span>
-              ))}
-            </div>
-          )}
-
-          {/* ── Expanded detail panel ── */}
-          {expanded && (
-            <ExpandedDetail topic={topic} reaction={reaction} />
-          )}
-
-          {/* ── Draft panel ── */}
-          {activePanel === 'draft' && (
-            <DraftPanel
-              topic={topic}
-              onSent={handleDraftSent}
-              onCancel={() => setActivePanel(null)}
-            />
-          )}
-
-          {/* ── Monitor / Exclude panel ── */}
-          {(activePanel === 'monitor' || activePanel === 'exclude') && (
-            <TriagePanel
-              kind={activePanel}
-              onConfirm={handleTriageConfirm}
-              onCancel={() => setActivePanel(null)}
-            />
-          )}
-
-          {/* ── Error message ── */}
-          {saveError && (
-            <div style={{ fontSize: 11, color: OHM.roseInk, marginTop: 6 }}>{saveError}</div>
-          )}
-
-          {/* ── Action buttons ── */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            {done ? (
-              <button
-                onClick={handleUndo}
-                style={{ fontSize: 12, color: OHM.muted, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}
-              >
-                Undo
-              </button>
-            ) : (
-              !activePanel && (
+              )}
+              <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
+              <span style={{ fontSize: 11, color: OHM.muted }}>{topic.status}</span>
+              {topic.batch_id && (
                 <>
-                  <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
-                  <TriageBtn kind="supp" onClick={handleSupport}                   disabled={saving}>Support</TriageBtn>
-                  <TriageBtn kind="mon"  onClick={() => setActivePanel('monitor')} disabled={saving}>Monitor</TriageBtn>
-                  <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
+                  <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
+                  <span style={{ fontSize: 11, color: OHM.muted, fontFeatureSettings: '"tnum"' }}>{topic.batch_id}</span>
                 </>
-              )
-            )}
-          </div>
+              )}
+              {done && (
+                <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: reactionColor }}>
+                  {REACTION_LABEL[reaction]}
+                </span>
+              )}
+            </div>
 
+            {/* Title — click opens modal */}
+            <h2
+              onClick={() => setModalOpen(true)}
+              style={{
+                fontFamily: '"Source Serif 4", Georgia, serif',
+                fontSize: 21, fontWeight: 400, margin: '0 0 8px 0',
+                letterSpacing: -0.3, lineHeight: 1.25, color: OHM.ink,
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+              }}
+            >
+              <span
+                style={{ flex: 1, borderBottom: '1px solid transparent', transition: 'border-color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = OHM.sageDeep}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
+              >
+                {topic.title}
+              </span>
+              <span style={{
+                fontSize: 11, color: OHM.mutedLt,
+                marginTop: 5, flexShrink: 0,
+                padding: '2px 7px', borderRadius: 3,
+                border: `1px solid ${OHM.line}`,
+                background: OHM.paper,
+                fontFamily: 'Inter, system-ui, sans-serif',
+                fontWeight: 400,
+              }}>
+                View ↗
+              </span>
+            </h2>
+
+            {/* Brief preview */}
+            {briefText && (
+              <p style={{ fontSize: 13.5, color: OHM.muted, margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
+                {briefPreview}
+              </p>
+            )}
+
+            {/* Signal tags */}
+            {topic.signals?.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                {topic.signals.map(s => (
+                  <span key={s} style={{
+                    fontSize: 10.5, color: OHM.muted,
+                    padding: '2px 8px', border: `1px solid ${OHM.line}`,
+                    borderRadius: 99, background: OHM.paper, letterSpacing: 0.1,
+                  }}>
+                    o {s}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Draft panel */}
+            {activePanel === 'draft' && (
+              <DraftPanel
+                topic={topic}
+                onSent={handleDraftSent}
+                onCancel={() => setActivePanel(null)}
+              />
+            )}
+
+            {/* Monitor / Exclude panel */}
+            {(activePanel === 'monitor' || activePanel === 'exclude') && (
+              <TriagePanel
+                kind={activePanel}
+                onConfirm={handleTriageConfirm}
+                onCancel={() => setActivePanel(null)}
+              />
+            )}
+
+            {/* Error */}
+            {saveError && (
+              <div style={{ fontSize: 11, color: OHM.roseInk, marginTop: 6 }}>{saveError}</div>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              {done ? (
+                <button
+                  onClick={handleUndo}
+                  style={{ fontSize: 12, color: OHM.muted, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}
+                >
+                  Undo
+                </button>
+              ) : (
+                !activePanel && (
+                  <>
+                    <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
+                    <TriageBtn kind="supp" onClick={handleSupport}                   disabled={saving}>Support</TriageBtn>
+                    <TriageBtn kind="mon"  onClick={() => setActivePanel('monitor')} disabled={saving}>Monitor</TriageBtn>
+                    <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
+                  </>
+                )
+              )}
+            </div>
+
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+
+      {/* Modal — rendered via React portal directly onto document.body */}
+      {modalOpen && (
+        <TopicModal
+          topic={topic}
+          reaction={reaction}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </>
   )
 }
