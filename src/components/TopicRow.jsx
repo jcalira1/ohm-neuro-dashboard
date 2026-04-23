@@ -273,6 +273,139 @@ function TriagePanel({ kind, onConfirm, onCancel }) {
   )
 }
 
+// ─── Expanded detail panel ────────────────────────────────────────────────────
+
+function ExpandedDetail({ topic, reaction }) {
+  const REACTION_LABEL = {
+    full: '✓ Draft queued',
+    supp: '✓ Added as Support',
+    excl: '✗ Excluded',
+    mon:  '◦ Monitoring',
+  }
+
+  return (
+    <div style={{
+      marginTop: 16,
+      padding: '20px 22px',
+      borderRadius: 8,
+      border: `1px solid ${OHM.sageDeep}`,
+      background: OHM.cream,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 20,
+    }}>
+
+      {/* ── Full research brief ── */}
+      <div>
+        <div style={sectionLabel}>Research Brief</div>
+        <p style={{
+          fontSize: 14, color: OHM.ink, lineHeight: 1.75,
+          margin: 0, maxWidth: 660,
+        }}>
+          {topic.research_brief || '—'}
+        </p>
+      </div>
+
+      <div style={{ height: 1, background: OHM.lineSoft }} />
+
+      {/* ── Source URL ── */}
+      <div>
+        <div style={sectionLabel}>Source</div>
+        {topic.source_url ? (
+          <a
+            href={topic.source_url}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 12, color: OHM.blueInk,
+              padding: '6px 14px', borderRadius: 4,
+              border: `1px solid ${OHM.blueLine}`,
+              background: OHM.blueBg,
+              textDecoration: 'none',
+              fontWeight: 500,
+            }}
+          >
+            Open source →
+          </a>
+        ) : (
+          <span style={{ fontSize: 13, color: OHM.mutedLt }}>No source URL saved</span>
+        )}
+      </div>
+
+      <div style={{ height: 1, background: OHM.lineSoft }} />
+
+      {/* ── Reaction / Doc status ── */}
+      <div>
+        <div style={sectionLabel}>Status this session</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {reaction ? (
+            <span style={{
+              fontSize: 12, fontWeight: 600,
+              color: (reaction === 'excl' || reaction === 'mon') ? OHM.roseInk : OHM.primary,
+              padding: '4px 10px', borderRadius: 4,
+              background: (reaction === 'excl' || reaction === 'mon') ? OHM.roseBg : OHM.sage,
+              border: `1px solid ${(reaction === 'excl' || reaction === 'mon') ? OHM.roseLine : OHM.sageDeep}`,
+            }}>
+              {REACTION_LABEL[reaction]}
+            </span>
+          ) : (
+            <span style={{ fontSize: 13, color: OHM.mutedLt }}>Not yet triaged</span>
+          )}
+
+          {topic.draft_doc_url && (
+            <a
+              href={topic.draft_doc_url}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                fontSize: 12, color: OHM.primary,
+                padding: '5px 12px', borderRadius: 4,
+                border: `1px solid ${OHM.sageDeep}`,
+                background: OHM.sage,
+                textDecoration: 'none',
+                fontWeight: 500,
+              }}
+            >
+              Open Draft Doc →
+            </a>
+          )}
+        </div>
+      </div>
+
+      <div style={{ height: 1, background: OHM.lineSoft }} />
+
+      {/* ── Linked Support articles placeholder ── */}
+      <div>
+        <div style={sectionLabel}>Linked Support Articles</div>
+        <div style={{
+          padding: '10px 14px',
+          borderRadius: 6,
+          background: OHM.sage,
+          border: `1px solid ${OHM.sageDeep}`,
+          fontSize: 12,
+          color: OHM.primary,
+          lineHeight: 1.55,
+        }}>
+          ↗ Linked support articles will appear here once Support Tagging is live.
+        </div>
+      </div>
+
+    </div>
+  )
+}
+
+// shared label style used inside ExpandedDetail
+const sectionLabel = {
+  fontSize: 10.5,
+  letterSpacing: '0.16em',
+  textTransform: 'uppercase',
+  color: OHM.primary,
+  fontWeight: 700,
+  marginBottom: 8,
+}
+
 // ─── TopicRow ─────────────────────────────────────────────────────────────────
 
 const REACTION_LABEL = {
@@ -284,13 +417,21 @@ const REACTION_LABEL = {
 
 export default function TopicRow({ topic, index, onReact, onUndo }) {
   const [reaction,       setReaction]       = useState(null)
-  const [activePanel,    setActivePanel]    = useState(null) // 'draft' | 'monitor' | 'exclude'
+  const [activePanel,    setActivePanel]    = useState(null)   // 'draft' | 'monitor' | 'exclude'
+  const [expanded,       setExpanded]       = useState(false)
   const [saving,         setSaving]         = useState(false)
   const [saveError,      setSaveError]      = useState(null)
 
   const cat  = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
   const done = !!reaction
   const reactionColor = (reaction === 'excl' || reaction === 'mon') ? OHM.roseInk : OHM.primary
+
+  // Truncate brief when collapsed
+  const BRIEF_LIMIT = 160
+  const briefText = topic.research_brief || ''
+  const briefCollapsed = briefText.length > BRIEF_LIMIT
+    ? briefText.slice(0, BRIEF_LIMIT) + '…'
+    : briefText
 
   // ── Persist helpers ──────────────────────────────────────────────────────────
 
@@ -333,12 +474,10 @@ export default function TopicRow({ topic, index, onReact, onUndo }) {
   }
 
   async function handleUndo() {
-    // Reset UI immediately
     setReaction(null)
     setActivePanel(null)
     setSaveError(null)
 
-    // 1. Fetch doc URL before clearing it
     const { data } = await supabase
       .from('topics')
       .select('draft_doc_url')
@@ -347,13 +486,11 @@ export default function TopicRow({ topic, index, onReact, onUndo }) {
 
     const docUrl = data?.draft_doc_url
 
-    // 2. Clear Supabase (source of truth first)
     await Promise.all([
       supabase.from('topics').update({ draft_doc_url: null }).eq('id', topic.id),
       supabase.from('reactions').delete().eq('topic_id', topic.id).eq('reaction', 'draft_queued'),
     ])
 
-    // 3. Ask Apps Script to trash the doc (fire-and-forget)
     if (docUrl) fireAppsScript({ action: 'delete', doc_url: docUrl })
 
     onUndo()
@@ -380,7 +517,7 @@ export default function TopicRow({ topic, index, onReact, onUndo }) {
 
         <div style={{ flex: 1, minWidth: 0 }}>
 
-          {/* Meta row */}
+          {/* ── Meta row ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
             {topic.category && (
               <span style={{
@@ -406,24 +543,38 @@ export default function TopicRow({ topic, index, onReact, onUndo }) {
             )}
           </div>
 
-          {/* Title */}
-          <h2 style={{
-            fontFamily: '"Source Serif 4", Georgia, serif',
-            fontSize: 21, fontWeight: 400, margin: '0 0 8px 0',
-            letterSpacing: -0.3, lineHeight: 1.25, color: OHM.ink,
-          }}>
-            {topic.title}
+          {/* ── Title — click to expand ── */}
+          <h2
+            onClick={() => setExpanded(e => !e)}
+            style={{
+              fontFamily: '"Source Serif 4", Georgia, serif',
+              fontSize: 21, fontWeight: 400, margin: '0 0 8px 0',
+              letterSpacing: -0.3, lineHeight: 1.25, color: OHM.ink,
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+            }}
+          >
+            <span style={{ flex: 1 }}>{topic.title}</span>
+            <span style={{
+              fontSize: 12, color: OHM.mutedLt,
+              marginTop: 4, flexShrink: 0,
+              transition: 'transform 0.2s',
+              display: 'inline-block',
+              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+            }}>
+              ▾
+            </span>
           </h2>
 
-          {/* Brief */}
-          {topic.research_brief && (
+          {/* ── Brief (collapsed — truncated) ── */}
+          {!expanded && briefText && (
             <p style={{ fontSize: 13.5, color: OHM.muted, margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
-              {topic.research_brief}
+              {briefCollapsed}
             </p>
           )}
 
-          {/* Signal tags */}
-          {topic.signals?.length > 0 && (
+          {/* ── Signal tags ── */}
+          {!expanded && topic.signals?.length > 0 && (
             <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
               {topic.signals.map(s => (
                 <span key={s} style={{
@@ -437,7 +588,12 @@ export default function TopicRow({ topic, index, onReact, onUndo }) {
             </div>
           )}
 
-          {/* Draft panel */}
+          {/* ── Expanded detail panel ── */}
+          {expanded && (
+            <ExpandedDetail topic={topic} reaction={reaction} />
+          )}
+
+          {/* ── Draft panel ── */}
           {activePanel === 'draft' && (
             <DraftPanel
               topic={topic}
@@ -446,7 +602,7 @@ export default function TopicRow({ topic, index, onReact, onUndo }) {
             />
           )}
 
-          {/* Monitor / Exclude panel */}
+          {/* ── Monitor / Exclude panel ── */}
           {(activePanel === 'monitor' || activePanel === 'exclude') && (
             <TriagePanel
               kind={activePanel}
@@ -455,12 +611,12 @@ export default function TopicRow({ topic, index, onReact, onUndo }) {
             />
           )}
 
-          {/* Error message */}
+          {/* ── Error message ── */}
           {saveError && (
             <div style={{ fontSize: 11, color: OHM.roseInk, marginTop: 6 }}>{saveError}</div>
           )}
 
-          {/* Action buttons */}
+          {/* ── Action buttons ── */}
           <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             {done ? (
               <button
