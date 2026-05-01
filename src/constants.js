@@ -1,4 +1,10 @@
-// ─── Workflow constants ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// FILE: src/constants.js  (replace the existing file with this)
+// Changes: adds TIER_MAP, FEED_STATUSES, EXCLUDE_QUALIFIERS
+// Old BUBBLES for positive reactions replaced by tier model
+// ─────────────────────────────────────────────────────────────
+
+// ─── Pipeline status stages ───────────────────────────────────────────────────
 
 export const STATUSES = [
   'Idea',
@@ -10,9 +16,39 @@ export const STATUSES = [
   'Published',
 ]
 
-// ─── Triage reason bubbles ────────────────────────────────────────────────────
+// ─── Feed status (topics.feed_status) ────────────────────────────────────────
 
-export const BUBBLES = {
+export const FEED_STATUSES = {
+  IN_FEED:  'in_feed',
+  DRAFTED:  'drafted',
+  ARCHIVED: 'archived',
+  EXCLUDED: 'excluded',
+}
+
+// ─── Tier model ───────────────────────────────────────────────────────────────
+// Tier 1 = Draft (full piece), Tier 2 = Support, Tier 3 = Monitor, null = Exclude
+
+export const TIER_MAP = {
+  1: { label: 'Draft',   reaction: 'draft_queued', shortLabel: '✓ Draft'    },
+  2: { label: 'Support', reaction: 'supporting',   shortLabel: '✓ Support'  },
+  3: { label: 'Monitor', reaction: 'monitor',       shortLabel: '◦ Monitor'  },
+  null: { label: 'Exclude', reaction: 'exclude',   shortLabel: '✗ Excluded' },
+}
+
+// ─── Exclude qualifier vocabulary (single-select) ────────────────────────────
+// Confirmed decisions from migration spec
+
+export const EXCLUDE_QUALIFIERS = [
+  'Already covered',
+  'Off-narrative',
+  'Weak evidence',
+  'Too niche',
+  'Not relevant to audience',
+]
+
+// ─── Monitor reason bubbles (kept for monitor triage panel) ──────────────────
+
+export const MONITOR_BUBBLES = {
   up: [
     'Strong evidence base',
     'Emerging trend',
@@ -26,13 +62,6 @@ export const BUBBLES = {
     'Weak evidence',
     'Not relevant to audience',
     'Too broad',
-  ],
-  exclude: [
-    'Not relevant to our audience',
-    'Already covered this',
-    'No credible evidence',
-    'Not aligned with our editorial angle',
-    'Low quality source',
   ],
 }
 
