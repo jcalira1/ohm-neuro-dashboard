@@ -168,9 +168,7 @@ export default async function handler(req, res) {
 
     const { error: insertError } = await supabase
       .from('topic_cards')
-      .insert(rows)
-      .onConflict('source_url')
-      .ignore()
+      .upsert(rows, { onConflict: 'source_url', ignoreDuplicates: true })
 
     if (insertError) {
       return res.status(500).json({ error: 'Failed to persist cards to database.' })
