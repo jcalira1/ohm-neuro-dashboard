@@ -2,24 +2,41 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { OHM } from './tokens'
 import { getWeekLabel, groupTopics } from './utils/helpers'
-import Sidebar      from './components/Sidebar'
-import ProgressRing from './components/ProgressRing'
-import TopicRow     from './components/TopicRow'
+import { useTopicCards }   from './hooks/useTopicCards'
+import Sidebar             from './components/Sidebar'
+import ProgressRing        from './components/ProgressRing'
+import TopicRow            from './components/TopicRow'
+import RegenerateButton    from './components/RegenerateButton'
 
 const WEEK_LABEL = getWeekLabel()
 
 const STAT_CONFIG = topics => [
-  ['Cards',    topics.length,  OHM.primary],
-  ['Reviewed', 0,              OHM.blueInk],
+  ['Cards',    topics.length,                       OHM.primary],
+  ['Reviewed', 0,                                   OHM.blueInk],
 ]
 
 export default function App() {
+
+  // ── useTopicCards hook (must be first) ──
+  const {
+    loading:  genLoading,
+    error:    genError,
+    lastToast,
+    loadLatest,
+    regenerate,
+  } = useTopicCards()
+
+  // ── All useState hooks ──
   const [topics,       setTopics]       = useState([])
   const [loading,      setLoading]      = useState(true)
   const [reactedCount, setReactedCount] = useState(0)
   const [grouping,     setGrouping]     = useState('none')
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
   const [isMobile,     setIsMobile]     = useState(() => window.innerWidth < 768)
+  const [readerIndex,  setReaderIndex]  = useState(null)
+
+  // ── All useEffects ──
+  useEffect(() => { loadLatest() }, [loadLatest])
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768)
@@ -61,8 +78,10 @@ export default function App() {
 
       <main style={{ flex: 1, minWidth: 0, background: OHM.paper }}>
 
+        {/* ── Top bar ── */}
         <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: '16px 20px', background: OHM.paper }}>
 
+          {/* Hamburger + wordmark */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
             <button
               onClick={() => setSidebarOpen(true)}
@@ -78,6 +97,7 @@ export default function App() {
             </div>
           </div>
 
+          {/* Hero row */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 10.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 8 }}>
@@ -89,12 +109,13 @@ export default function App() {
               <div style={{ fontSize: 13, color: OHM.muted, marginTop: 8, maxWidth: 560, lineHeight: 1.55 }}>
                 {loading
                   ? 'Loading topics...'
-                  : `${topics.length} topics from Supabase. Decide what becomes a draft, supporting link, or monitor.`
+                  : `${topics.length} cards loaded. Decide what becomes a draft, supporting link, or monitor.`
                 }
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {/* ── Progress ring + Regenerate button ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
               <ProgressRing done={reactedCount} total={topics.length} />
               <div>
                 <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 22, color: OHM.ink, lineHeight: 1 }}>
@@ -105,11 +126,20 @@ export default function App() {
                   Reviewed
                 </div>
               </div>
+
+              {/* Regenerate button */}
+              <RegenerateButton
+                loading={genLoading}
+                error={genError}
+                lastToast={lastToast}
+                onRegenerate={regenerate}
+              />
             </div>
           </div>
 
+          {/* Stat grid */}
           {!loading && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 1, background: OHM.line, borderRadius: 6, overflow: 'hidden', border: `1px solid ${OHM.line}`, marginTop: 22 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: OHM.line, borderRadius: 6, overflow: 'hidden', border: `1px solid ${OHM.line}`, marginTop: 22 }}>
               {stats.map(([label, value, color]) => (
                 <div key={label} style={{ background: OHM.paper, padding: '12px 16px' }}>
                   <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 26, fontWeight: 400, color, lineHeight: 1, fontFeatureSettings: '"tnum"' }}>
@@ -124,11 +154,13 @@ export default function App() {
           )}
         </div>
 
+        {/* ── Feed ── */}
         <div style={{ padding: '28px 44px 80px', maxWidth: 900 }}>
 
+          {/* Grouping controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <span style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em' }}>Group by</span>
-            {['none', 'category', 'status'].map(g => (
+            {['none', 'category'].map(g => (
               <button
                 key={g}
                 onClick={() => setGrouping(g)}
@@ -145,20 +177,23 @@ export default function App() {
             ))}
           </div>
 
+          {/* Loading */}
           {loading && (
             <div style={{ padding: '40px 0', color: OHM.muted, fontSize: 14 }}>
               Loading this week&apos;s signal...
             </div>
           )}
 
+          {/* Empty state */}
           {!loading && topics.length === 0 && (
             <div style={{ padding: '32px', borderRadius: 8, background: OHM.sage, border: `1px solid ${OHM.sageDeep}` }}>
               <p style={{ color: OHM.primary, fontSize: 14, margin: 0 }}>
-                No topics found. Add rows to your Supabase <code>topics</code> table.
+                No cards yet — click <strong>↻ Regenerate</strong> to generate this week&apos;s signal.
               </p>
             </div>
           )}
 
+          {/* Topic groups */}
           {!loading && groups.map(({ key, label, items }) => (
             <section key={key} style={{ marginBottom: 28 }}>
               {grouping !== 'none' && (
@@ -176,7 +211,10 @@ export default function App() {
                 <TopicRow
                   key={topic.id}
                   topic={topic}
+                  topics={topics}
                   index={i}
+                  readerIndex={readerIndex}
+                  setReaderIndex={setReaderIndex}
                   onReact={() => setReactedCount(c => c + 1)}
                   onUndo={()  => setReactedCount(c => Math.max(0, c - 1))}
                 />
@@ -184,6 +222,7 @@ export default function App() {
             </section>
           ))}
 
+          {/* Footer */}
           {!loading && topics.length > 0 && (
             <div style={{ textAlign: 'center', marginTop: 40, fontSize: 11, color: OHM.mutedLt, letterSpacing: '0.08em' }}>
               End of week&apos;s signal · Ohm Neuro Intelligence V2 · Prompt v1.1
