@@ -114,7 +114,7 @@ const {
 
               {/* Regenerate button */}
               <RegenerateButton
-                loading={genLoading}
+                loading={loading}
                 error={genError}
                 lastToast={lastToast}
                 onRegenerate={regenerate}
