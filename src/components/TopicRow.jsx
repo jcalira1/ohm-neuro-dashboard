@@ -1,22 +1,45 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../supabase'
 import { OHM, CAT_STYLE } from '../tokens'
 import { MONITOR_BUBBLES, EXCLUDE_QUALIFIERS, SHARED_FOLDER_URL } from '../constants'
 import { fireAppsScript, pollForDocUrl } from '../utils/helpers'
+import { undoReaction } from '../utils/undo'
 import TriageBtn from './TriageBtn'
+import ConfirmModal from './ConfirmModal'
 
-// ─── Topic Detail Modal ───────────────────────────────────────────────────────
+// ─── Tier map ─────────────────────────────────────────────────────────────────
 
-function TopicModal({ topic, reaction, onReact, onUndo, onClose }) {
+const TIER_FROM_TYPE = {
+  draft_queued: 1,
+  supporting:   2,
+  monitor:      3,
+  exclude:      null,
+}
+
+// ─── Full-Screen Topic Reader ─────────────────────────────────────────────────
+
+function TopicReader({
+  topic, topics, currentIndex,
+  reaction, docUrl,
+  onReact, onUndo, onClose,
+  onNavigate,
+}) {
   const cat = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
 
-  const [activePanel, setActivePanel] = useState(null)
-  const [saving,      setSaving]      = useState(false)
-  const [saveError,   setSaveError]   = useState(null)
-  const [localRxn,    setLocalRxn]    = useState(reaction)
+  const [activePanel,     setActivePanel]     = useState(null)
+  const [saving,          setSaving]          = useState(false)
+  const [saveError,       setSaveError]       = useState(null)
+  const [localRxn,        setLocalRxn]        = useState(reaction)
+  const [localDocUrl,     setLocalDocUrl]     = useState(docUrl)
+  const [confirmUndoOpen, setConfirmUndoOpen] = useState(false)
+  const undoingRef = useRef(false)
+  const scrollRef  = useRef(null)
 
-  const done = !!localRxn
+  const done       = !!localRxn || !!localDocUrl
+  const isDraftish = localRxn === 'full' || (!localRxn && !!localDocUrl)
+  const isNegative = localRxn === 'excl' || localRxn === 'mon'
+  const reactionColor = isNegative ? OHM.roseInk : OHM.primary
 
   const REACTION_LABEL = {
     full: '✓ Draft queued',
@@ -24,12 +47,9 @@ function TopicModal({ topic, reaction, onReact, onUndo, onClose }) {
     excl: '✗ Excluded',
     mon:  '◦ Monitoring',
   }
-
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const statusPillText = localRxn
+    ? REACTION_LABEL[localRxn]
+    : isDraftish ? '✓ Draft queued' : null
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -37,27 +57,47 @@ function TopicModal({ topic, reaction, onReact, onUndo, onClose }) {
     return () => { document.body.style.overflow = prev }
   }, [])
 
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key === 'ArrowRight' && currentIndex < topics.length - 1) onNavigate(currentIndex + 1)
+      if (e.key === 'ArrowLeft'  && currentIndex > 0)                  onNavigate(currentIndex - 1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, onNavigate, currentIndex, topics.length])
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+  }, [topic.id])
+
   async function persistReaction(type, voteDir, bubbles, notes) {
-    setSaving(true)
-    setSaveError(null)
+    setSaving(true); setSaveError(null)
     const reasonText = bubbles.length > 0
       ? bubbles.join(', ') + (notes.trim() ? ' — ' + notes.trim() : '')
       : notes.trim()
     const { error } = await supabase.from('reactions').insert({
       topic_id:       topic.id,
       reaction:       type,
+      tier:           TIER_FROM_TYPE[type] ?? null,
       reason:         reasonText || null,
       vote_direction: voteDir,
       prompt_version: 'v1.1',
     })
     if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
-    onReact()
-    setSaving(false)
+
+    if (type === 'draft_queued') {
+      await supabase.from('topics').update({ feed_status: 'drafted' }).eq('id', topic.id)
+    }
+    if (type === 'exclude') {
+      await supabase.from('topics').update({ feed_status: 'excluded' }).eq('id', topic.id)
+    }
+
+    onReact(); setSaving(false)
   }
 
   async function handleSupport() {
-    setLocalRxn('supp')
-    setActivePanel(null)
+    setLocalRxn('supp'); setActivePanel(null)
     await persistReaction('supporting', null, [], '')
   }
 
@@ -69,194 +109,207 @@ function TopicModal({ topic, reaction, onReact, onUndo, onClose }) {
   }
 
   function handleDraftSent() {
-    setActivePanel(null)
-    setLocalRxn('full')
-    onReact()
+    setActivePanel(null); setLocalRxn('full'); onReact()
+    pollForDocUrl(topic.id).then(url => { if (url) setLocalDocUrl(url) })
   }
 
-  async function handleUndo() {
-    setLocalRxn(null)
-    setActivePanel(null)
-    setSaveError(null)
-    const { data } = await supabase.from('topics').select('draft_doc_url').eq('id', topic.id).single()
-    const docUrl = data?.draft_doc_url
-    await Promise.all([
-      supabase.from('topics').update({ draft_doc_url: null }).eq('id', topic.id),
-      supabase.from('reactions').delete().eq('topic_id', topic.id).eq('reaction', 'draft_queued'),
-    ])
-    if (docUrl) fireAppsScript({ action: 'delete', doc_url: docUrl })
-    onUndo()
+  function handleUndo() {
+    if (undoingRef.current) return
+    setSaveError(null); setConfirmUndoOpen(true)
   }
 
-  const reactionColor = (localRxn === 'excl' || localRxn === 'mon') ? OHM.roseInk : OHM.primary
+  async function performUndo({ extraChecked: keepNotes }) {
+    if (undoingRef.current) return
+    undoingRef.current = true
+    const prev = localRxn || (isDraftish ? 'full' : null)
+    setLocalRxn(null); setActivePanel(null); setSaveError(null); setLocalDocUrl(null)
+    const r = await undoReaction({ topicId: topic.id, reaction: prev, keepNotes })
+    undoingRef.current = false
+    if (r.ok) { setConfirmUndoOpen(false); onUndo() }
+    else { setLocalRxn(prev); setSaveError(r.error); throw new Error(r.error) }
+  }
+
+  const hasPrev = currentIndex > 0
+  const hasNext = currentIndex < topics.length - 1
 
   return createPortal(
     <>
-      <div onClick={onClose} style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(12, 24, 18, 0.55)',
-        backdropFilter: 'blur(3px)',
-        WebkitBackdropFilter: 'blur(3px)',
-        zIndex: 200,
-        animation: 'ohmFadeIn 0.18s ease',
-      }} />
-
-      <div role="dialog" aria-modal="true" style={{
-        position: 'fixed',
-        top: '50%', left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: 'min(680px, calc(100vw - 40px))',
-        maxHeight: 'calc(100vh - 80px)',
-        overflowY: 'auto',
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 400,
         background: OHM.paper,
-        borderRadius: 12,
-        border: `1px solid ${OHM.line}`,
-        boxShadow: '0 24px 64px rgba(12,24,18,0.18), 0 4px 16px rgba(12,24,18,0.08)',
-        zIndex: 201,
-        animation: 'ohmSlideUp 0.22s ease',
+        display: 'flex', flexDirection: 'column',
+        animation: 'rdrFadeIn 0.22s ease',
       }}>
-        {/* Sticky header */}
+        {/* Top chrome */}
         <div style={{
-          padding: '24px 28px 20px',
+          flexShrink: 0, position: 'relative',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 24px', height: 60,
           borderBottom: `1px solid ${OHM.lineSoft}`,
-          position: 'sticky', top: 0,
-          background: OHM.paper, zIndex: 1,
-          display: 'flex', alignItems: 'flex-start', gap: 16,
+          background: OHM.paper,
         }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button onClick={() => hasPrev && onNavigate(currentIndex - 1)} disabled={!hasPrev}
+              aria-label="Previous topic" style={{ ...chromeBtnStyle, opacity: hasPrev ? 1 : 0.25 }}>←</button>
+            <button onClick={() => hasNext && onNavigate(currentIndex + 1)} disabled={!hasNext}
+              aria-label="Next topic" style={{ ...chromeBtnStyle, opacity: hasNext ? 1 : 0.25 }}>→</button>
+            <span style={{ fontSize: 11, color: OHM.mutedLt, fontFeatureSettings: '"tnum"', marginLeft: 12, letterSpacing: '0.04em' }}>
+              {String(currentIndex + 1).padStart(2, '0')} / {String(topics.length).padStart(2, '0')}
+            </span>
+          </div>
+          <div style={{
+            position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+            fontFamily: '"Source Serif 4", Georgia, serif',
+            fontSize: 12, color: OHM.muted, letterSpacing: '0.22em', textTransform: 'uppercase', fontWeight: 500,
+          }}>Ohm Neuro</div>
+          <button onClick={onClose} aria-label="Close reader" style={{ ...chromeBtnStyle, fontSize: 15 }}>✕</button>
+        </div>
+
+        {/* Scrollable article */}
+        <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <article style={{ maxWidth: 680, margin: '0 auto', padding: '72px 32px 80px' }}>
+
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28, flexWrap: 'wrap',
+              fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.muted,
+            }}>
               {topic.category && (
-                <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', padding: '2px 8px', borderRadius: 3, background: cat.bg, color: cat.ink, border: `1px solid ${cat.line}` }}>
+                <span style={{ color: cat.ink, padding: '4px 10px', borderRadius: 3, background: cat.bg, border: `1px solid ${cat.line}`, letterSpacing: '0.08em' }}>
                   {topic.category}
                 </span>
               )}
-              <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
-              <span style={{ fontSize: 11, color: OHM.muted }}>{topic.status}</span>
-              {topic.batch_id && (<>
-                <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
-                <span style={{ fontSize: 11, color: OHM.muted, fontFeatureSettings: '"tnum"' }}>{topic.batch_id}</span>
-              </>)}
-              {done && (
-                <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: reactionColor, padding: '2px 8px', borderRadius: 3, background: (localRxn === 'excl' || localRxn === 'mon') ? OHM.roseBg : OHM.sage, border: `1px solid ${(localRxn === 'excl' || localRxn === 'mon') ? OHM.roseLine : OHM.sageDeep}` }}>
-                  {REACTION_LABEL[localRxn]}
-                </span>
-              )}
+              {topic.status && (<><span style={{ color: OHM.mutedLt, fontWeight: 400 }}>·</span><span style={{ fontWeight: 500 }}>{topic.status}</span></>)}
+              {topic.batch_id && (<><span style={{ color: OHM.mutedLt, fontWeight: 400 }}>·</span><span style={{ fontFeatureSettings: '"tnum"', fontWeight: 500 }}>{topic.batch_id}</span></>)}
             </div>
-            <h2 style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 24, fontWeight: 400, margin: 0, letterSpacing: -0.4, lineHeight: 1.2, color: OHM.ink }}>
-              {topic.title}
-            </h2>
-          </div>
-          <button onClick={onClose} aria-label="Close" style={{ flexShrink: 0, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: `1px solid ${OHM.line}`, borderRadius: 6, cursor: 'pointer', color: OHM.muted, fontSize: 16, lineHeight: 1 }}>
-            ✕
-          </button>
-        </div>
 
-        {/* Body */}
-        <div style={{ padding: '24px 28px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <h1 style={{
+              fontFamily: '"Source Serif 4", Georgia, serif',
+              fontSize: 'clamp(32px, 5vw, 44px)', fontWeight: 400, lineHeight: 1.08,
+              letterSpacing: '-0.022em', color: OHM.ink, margin: 0,
+            }}>{topic.title}</h1>
 
-          <section>
-            <div style={mLabel}>Research Brief</div>
-            <p style={{ fontSize: 14.5, color: OHM.ink, lineHeight: 1.75, margin: 0 }}>
-              {topic.research_brief || '—'}
-            </p>
-          </section>
+            <div style={{ height: 2, width: 44, background: OHM.primary, margin: '32px 0 36px' }} />
 
-          <div style={mDivider} />
+            <p style={{
+              fontFamily: '"Source Serif 4", Georgia, serif',
+              fontSize: 'clamp(17px, 1.6vw, 19px)', color: OHM.ink, lineHeight: 1.7, margin: 0, fontWeight: 400,
+            }}>{topic.research_brief || '—'}</p>
 
-          {topic.signals?.length > 0 && (<>
-            <section>
-              <div style={mLabel}>Signals</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {topic.signals?.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 28 }}>
                 {topic.signals.map(s => (
-                  <span key={s} style={{ fontSize: 11, color: OHM.muted, padding: '3px 10px', border: `1px solid ${OHM.line}`, borderRadius: 99, background: OHM.paper }}>{s}</span>
+                  <span key={s} style={{ fontSize: 11.5, color: OHM.muted, padding: '4px 12px', borderRadius: 99, border: `1px solid ${OHM.line}`, background: OHM.paper, letterSpacing: '0.02em' }}>{s}</span>
                 ))}
               </div>
-            </section>
-            <div style={mDivider} />
-          </>)}
-
-          <section>
-            <div style={mLabel}>Source</div>
-            {topic.source_url ? (
-              <a href={topic.source_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: OHM.blueInk, fontWeight: 500, padding: '6px 14px', borderRadius: 4, border: `1px solid ${OHM.blueLine}`, background: OHM.blueBg, textDecoration: 'none' }}>
-                Open source →
-              </a>
-            ) : (
-              <span style={{ fontSize: 13, color: OHM.mutedLt }}>No source URL saved yet</span>
             )}
-          </section>
 
-          {topic.draft_doc_url && (<>
-            <div style={mDivider} />
-            <section>
-              <div style={mLabel}>Draft Document</div>
-              <a href={topic.draft_doc_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: OHM.primary, fontWeight: 500, padding: '6px 14px', borderRadius: 4, border: `1px solid ${OHM.sageDeep}`, background: OHM.sage, textDecoration: 'none' }}>
-                Open Draft Doc →
-              </a>
-            </section>
-          </>)}
+            <aside style={{ marginTop: 56, padding: '24px 28px', borderRadius: 10, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 18 }}>About this piece</div>
+              <SpecsRow label="Source">
+                {topic.source_url ? (
+                  <a href={topic.source_url} target="_blank" rel="noopener noreferrer"
+                    style={{ color: OHM.blueInk, fontSize: 13, fontWeight: 500, textDecoration: 'none', borderBottom: `1px solid ${OHM.blueLine}`, paddingBottom: 1 }}>
+                    Open source ↗
+                  </a>
+                ) : (
+                  <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>No source URL saved yet</span>
+                )}
+              </SpecsRow>
+              <SpecsRow label="Draft Document">
+                {localDocUrl ? (
+                  <a href={localDocUrl} target="_blank" rel="noopener noreferrer"
+                    style={{ color: OHM.primary, fontSize: 13, fontWeight: 600, textDecoration: 'none', padding: '5px 12px', borderRadius: 5, background: OHM.sage, border: `1px solid ${OHM.sageDeep}`, display: 'inline-block' }}>
+                    Open Draft ↗
+                  </a>
+                ) : (
+                  <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Not yet drafted</span>
+                )}
+              </SpecsRow>
+              <SpecsRow label="Linked Support" last>
+                <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Will appear here once Support Tagging is live</span>
+              </SpecsRow>
+            </aside>
+          </article>
+        </div>
 
-          <div style={mDivider} />
-
-          <section>
-            <div style={mLabel}>Linked Support Articles</div>
-            <div style={{ padding: '12px 16px', borderRadius: 6, background: OHM.sage, border: `1px solid ${OHM.sageDeep}`, fontSize: 12, color: OHM.primary, lineHeight: 1.6 }}>
-              ↗ Linked support articles will appear here once Support Tagging is live.
-            </div>
-          </section>
-
-          <div style={mDivider} />
-
-          {/* Triage section */}
-          <section>
-            <div style={mLabel}>Triage</div>
-
-            {activePanel === 'draft' && (
+        {/* Sticky action bar */}
+        <div style={{ flexShrink: 0, borderTop: `1px solid ${OHM.line}`, background: OHM.paper, boxShadow: '0 -4px 16px rgba(12,24,18,0.04)' }}>
+          {activePanel === 'draft' && (
+            <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 24px 4px', animation: 'rdrFadeIn 0.18s ease' }}>
               <DraftPanel topic={topic} onSent={handleDraftSent} onCancel={() => setActivePanel(null)} />
-            )}
-            {(activePanel === 'monitor' || activePanel === 'exclude') && (
-              <TriagePanel kind={activePanel} onConfirm={handleTriageConfirm} onCancel={() => setActivePanel(null)} />
-            )}
-
-            {saveError && <div style={{ fontSize: 11, color: OHM.roseInk, marginBottom: 10 }}>{saveError}</div>}
-
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              {done ? (<>
-                <span style={{ fontSize: 12, fontWeight: 600, color: reactionColor, padding: '5px 12px', borderRadius: 4, background: (localRxn === 'excl' || localRxn === 'mon') ? OHM.roseBg : OHM.sage, border: `1px solid ${(localRxn === 'excl' || localRxn === 'mon') ? OHM.roseLine : OHM.sageDeep}` }}>
-                  {REACTION_LABEL[localRxn]}
-                </span>
-                <button onClick={handleUndo} style={{ fontSize: 12, color: OHM.muted, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
-                  Undo
-                </button>
-              </>) : (!activePanel && (<>
-                <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
-                <TriageBtn kind="supp" onClick={handleSupport}                   disabled={saving}>Support</TriageBtn>
-                <TriageBtn kind="mon"  onClick={() => setActivePanel('monitor')} disabled={saving}>Monitor</TriageBtn>
-                <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
-              </>))}
             </div>
-          </section>
+          )}
+          {(activePanel === 'monitor' || activePanel === 'exclude') && (
+            <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 24px 4px', animation: 'rdrFadeIn 0.18s ease' }}>
+              <TriagePanel kind={activePanel} onConfirm={handleTriageConfirm} onCancel={() => setActivePanel(null)} />
+            </div>
+          )}
 
+          {!activePanel && (
+            <div style={{ maxWidth: 720, margin: '0 auto', padding: '16px 24px 20px' }}>
+              {saveError && <div style={{ fontSize: 12, color: OHM.roseInk, marginBottom: 8 }}>{saveError}</div>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                {done ? (
+                  <>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: reactionColor, padding: '8px 16px', borderRadius: 6, background: isNegative ? OHM.roseBg : OHM.sage, border: `1px solid ${isNegative ? OHM.roseLine : OHM.sageDeep}` }}>
+                      {statusPillText}
+                    </span>
+                    <button onClick={handleUndo} style={{ fontSize: 13, fontWeight: 500, color: OHM.muted, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: '8px 4px', fontFamily: 'inherit' }}>
+                      {isDraftish && localDocUrl ? 'Archive Draft' : 'Undo'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.muted }}>Triage</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
+                      <TriageBtn kind="supp" onClick={handleSupport}                   disabled={saving}>Support</TriageBtn>
+                      <TriageBtn kind="mon"  onClick={() => setActivePanel('monitor')} disabled={saving}>Monitor</TriageBtn>
+                      <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <style>{`
-        @keyframes ohmFadeIn  { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes ohmSlideUp {
-          from { opacity: 0; transform: translate(-50%, calc(-50% + 16px)) }
-          to   { opacity: 1; transform: translate(-50%, -50%) }
-        }
-      `}</style>
+      {confirmUndoOpen && (
+        <ConfirmModal
+          title={isDraftish ? 'Archive this draft?' : 'Undo this reaction?'}
+          body={isDraftish
+            ? 'This will remove the Draft and move its Google Doc to the Archived Drafts folder. The Doc is archived, not deleted — you can restore it from Drive if needed.'
+            : 'This will clear the reaction. You can re-triage this topic immediately after.'}
+          confirmLabel={isDraftish ? 'Archive Draft' : 'Undo'}
+          extraOption={isDraftish ? { label: 'Keep my notes for next time', defaultChecked: true } : null}
+          onConfirm={performUndo}
+          onCancel={() => setConfirmUndoOpen(false)}
+        />
+      )}
+
+      <style>{`@keyframes rdrFadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
     </>,
     document.body
   )
 }
 
-const mLabel = {
-  fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase',
-  color: OHM.primary, fontWeight: 700, marginBottom: 10,
+function SpecsRow({ label, children, last }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, paddingBottom: last ? 0 : 14, marginBottom: last ? 0 : 14, borderBottom: last ? 'none' : `1px solid ${OHM.lineSoft}` }}>
+      <div style={{ flex: '0 0 130px', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: OHM.muted }}>{label}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    </div>
+  )
 }
-const mDivider = { height: 1, background: OHM.lineSoft }
+
+const chromeBtnStyle = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  width: 30, height: 30, background: 'none',
+  border: `1px solid ${OHM.line}`, borderRadius: 6,
+  cursor: 'pointer', fontSize: 13, color: OHM.muted,
+  fontFamily: 'Inter, system-ui, sans-serif',
+}
 
 // ─── DraftPanel ───────────────────────────────────────────────────────────────
 
@@ -267,41 +320,61 @@ function DraftPanel({ topic, onSent, onCancel }) {
 
   async function handleSaveForLater() {
     setSaving(true); setSaveError(null)
-    const { error } = await supabase.from('reactions').insert({ topic_id: topic.id, reaction: 'draft_queued', reason: draftNotes.trim() || null, vote_direction: null, prompt_version: 'v1.1' })
+    const { error } = await supabase.from('reactions').insert({
+      topic_id: topic.id, reaction: 'draft_queued',
+      tier: 1,
+      reason: draftNotes.trim() || null,
+      vote_direction: null, prompt_version: 'v1.1',
+    })
     if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
-    onSent('save'); setSaving(false)
+    await supabase.from('topics').update({ feed_status: 'drafted' }).eq('id', topic.id)
+    onSent(); setSaving(false)
   }
 
   async function handleSendToDocs() {
     setSaving(true); setSaveError(null)
     try {
-      const { error: reactionError } = await supabase.from('reactions').insert({ topic_id: topic.id, reaction: 'draft_queued', reason: draftNotes.trim() || null, vote_direction: null, prompt_version: 'v1.1' })
+      const { error: reactionError } = await supabase.from('reactions').insert({
+        topic_id: topic.id, reaction: 'draft_queued',
+        tier: 1,
+        reason: draftNotes.trim() || null,
+        vote_direction: null, prompt_version: 'v1.1',
+      })
       if (reactionError) { setSaveError('Failed to save reaction — try again'); setSaving(false); return }
-      fireAppsScript({ title: topic.title, brief: topic.research_brief || '', notes: draftNotes.trim(), topic_id: topic.id, status: topic.status || '', category: topic.category || '', batch_id: topic.batch_id || '' })
-      onSent('docs')
-      const url = await pollForDocUrl(topic.id)
-      window.open(url || SHARED_FOLDER_URL, '_blank')
-    } catch { setSaveError('Failed to create doc — try again') }
+      await supabase.from('topics').update({ feed_status: 'drafted' }).eq('id', topic.id)
+      fireAppsScript({
+        title: topic.title, brief: topic.research_brief || '',
+        notes: draftNotes.trim(), topic_id: topic.id,
+        status: topic.status || '', category: topic.category || '',
+        batch_id: topic.batch_id || '',
+      })
+      onSent()
+    } catch {
+      setSaveError('Failed to create doc — try again')
+    }
     setSaving(false)
   }
 
   return (
-    <div style={{ marginBottom: 14, padding: '16px 18px', borderRadius: 8, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
-      <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6, fontWeight: 600 }}>Draft brief</div>
-      <div style={{ fontSize: 12, color: OHM.mutedLt, marginBottom: 10 }}>{topic.title}</div>
-      <div style={{ fontSize: 11, color: OHM.muted, marginBottom: 6 }}>What points do you want to make?</div>
-      <textarea value={draftNotes} onChange={e => setDraftNotes(e.target.value)} placeholder="Key arguments, angles, claims to cover..." rows={4} autoFocus
-        style={{ width: '100%', padding: '8px 10px', border: `1px solid ${draftNotes.trim() ? OHM.primary : OHM.line}`, borderRadius: 4, fontSize: 13, fontFamily: 'inherit', background: OHM.paper, outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: 14, color: OHM.ink, lineHeight: 1.6 }}
+    <div style={{ marginBottom: 20, padding: '20px 22px', borderRadius: 8, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
+      <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10, color: OHM.muted, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6, fontWeight: 700 }}>Draft notes</div>
+      <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 14, color: OHM.mutedLt, marginBottom: 12 }}>{topic.title}</div>
+      <textarea
+        value={draftNotes} onChange={e => setDraftNotes(e.target.value)}
+        placeholder="Key arguments, angles, claims to cover..." rows={6} autoFocus
+        style={{ width: '100%', padding: '10px 12px', border: `1px solid ${draftNotes.trim() ? OHM.primary : OHM.line}`, borderRadius: 5, fontSize: 14, fontFamily: '"Source Serif 4", Georgia, serif', background: OHM.paper, outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: 14, color: OHM.ink, lineHeight: 1.65 }}
       />
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button onClick={handleSendToDocs} disabled={saving} style={{ padding: '7px 16px', borderRadius: 4, border: `1px solid ${OHM.primary}`, background: OHM.primary, color: '#fff', fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+        <button onClick={handleSendToDocs} disabled={saving}
+          style={{ padding: '8px 18px', borderRadius: 5, border: `1px solid ${OHM.primary}`, background: OHM.primary, color: '#fff', fontSize: 13, fontWeight: 500, fontFamily: 'Inter, system-ui, sans-serif', cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
           {saving ? 'Creating...' : 'Send to Docs →'}
         </button>
-        <button onClick={handleSaveForLater} disabled={saving} style={{ padding: '7px 16px', borderRadius: 4, border: `1px solid ${OHM.line}`, background: OHM.paper, color: OHM.muted, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+        <button onClick={handleSaveForLater} disabled={saving}
+          style={{ padding: '8px 18px', borderRadius: 5, border: `1px solid ${OHM.line}`, background: OHM.paper, color: OHM.muted, fontSize: 13, fontWeight: 500, fontFamily: 'Inter, system-ui, sans-serif', cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
           Save for later
         </button>
-        <button onClick={onCancel} style={{ fontSize: 12, color: OHM.mutedLt, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginLeft: 4 }}>Cancel</button>
-        {saveError && <span style={{ fontSize: 11, color: OHM.roseInk }}>{saveError}</span>}
+        <button onClick={onCancel} style={{ fontSize: 12, color: OHM.mutedLt, background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif', marginLeft: 4 }}>Cancel</button>
+        {saveError && <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11, color: OHM.roseInk }}>{saveError}</span>}
       </div>
     </div>
   )
@@ -323,44 +396,77 @@ function TriagePanel({ kind, onConfirm, onCancel }) {
   const activeStyle = (!isMonitor || voteDir === 'down')
     ? { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
     : { border: OHM.primary,  bg: OHM.sage,   color: OHM.primary }
-  const inactive = { border: OHM.line, bg: OHM.paper, color: OHM.muted }
+  const inactive   = { border: OHM.line, bg: OHM.paper, color: OHM.muted }
   const bubbleList = isMonitor ? (voteDir ? MONITOR_BUBBLES[voteDir] : []) : EXCLUDE_QUALIFIERS
 
-  function toggleBubble(lbl) { setSelected(p => p.includes(lbl) ? p.filter(b => b !== lbl) : [...p, lbl]) }
-  async function handleConfirm() { setSaving(true); await onConfirm(voteDir, selected, notes); setSaving(false) }
+  function toggleBubble(lbl) {
+    if (!isMonitor) {
+      // single-select for exclude
+      setSelected(p => p.includes(lbl) ? [] : [lbl])
+    } else {
+      setSelected(p => p.includes(lbl) ? p.filter(b => b !== lbl) : [...p, lbl])
+    }
+  }
+
+  async function handleConfirm() {
+    setSaving(true); await onConfirm(voteDir, selected, notes); setSaving(false)
+  }
 
   return (
-    <div style={{ marginBottom: 14, padding: '16px 18px', borderRadius: 8, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
-      {isMonitor && (<>
-        <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>Signal strength</div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {[{ dir: 'up', label: '+ Worth watching' }, { dir: 'down', label: '- Low priority' }].map(({ dir, label }) => {
-            const s = voteDir === dir ? (dir === 'up' ? { border: OHM.primary, bg: OHM.sage, color: OHM.primary } : { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }) : inactive
-            return <button key={dir} onClick={() => { setVoteDir(v => v === dir ? null : dir); setSelected([]) }} style={{ padding: '6px 16px', borderRadius: 99, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500, border: `1px solid ${s.border}`, background: s.bg, color: s.color }}>{label}</button>
-          })}
-        </div>
-      </>)}
-      {(!isMonitor || voteDir) && (<>
-        <div style={{ fontSize: 11, color: OHM.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
-          {!isMonitor ? 'Why this is a No' : voteDir === 'up' ? 'Why it is worth watching' : 'Why it is low priority'}
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-          {bubbleList.map(lbl => {
-            const active = selected.includes(lbl); const s = active ? activeStyle : inactive
-            return <button key={lbl} onClick={() => toggleBubble(lbl)} style={{ padding: '5px 12px', borderRadius: 99, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', fontWeight: active ? 500 : 400, border: `1px solid ${s.border}`, background: s.bg, color: s.color }}>{lbl}</button>
-          })}
-        </div>
-        <div style={{ fontSize: 11, color: OHM.mutedLt, marginBottom: 6 }}>Additional notes (optional)</div>
-        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Anything else worth capturing..." rows={2}
-          style={{ width: '100%', padding: '7px 10px', border: `1px solid ${notes.trim() ? OHM.primary : OHM.line}`, borderRadius: 4, fontSize: 12, fontFamily: 'inherit', background: OHM.paper, outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: 14, color: OHM.ink }}
-        />
-      </>)}
+    <div style={{ marginBottom: 20, padding: '20px 22px', borderRadius: 8, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
+      {isMonitor && (
+        <>
+          <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10, color: OHM.muted, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10, fontWeight: 700 }}>Signal strength</div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+            {[{ dir: 'up', label: '+ Worth watching' }, { dir: 'down', label: '- Low priority' }].map(({ dir, label }) => {
+              const s = voteDir === dir
+                ? (dir === 'up' ? { border: OHM.primary, bg: OHM.sage, color: OHM.primary } : { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk })
+                : inactive
+              return (
+                <button key={dir} onClick={() => { setVoteDir(v => v === dir ? null : dir); setSelected([]) }}
+                  style={{ padding: '7px 18px', borderRadius: 99, fontSize: 13, fontFamily: 'Inter, system-ui, sans-serif', cursor: 'pointer', fontWeight: 500, border: `1px solid ${s.border}`, background: s.bg, color: s.color }}>
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+      {(!isMonitor || voteDir) && (
+        <>
+          <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10, color: OHM.muted, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10, fontWeight: 700 }}>
+            {!isMonitor ? 'Why this is a No' : voteDir === 'up' ? 'Why it is worth watching' : 'Why it is low priority'}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+            {bubbleList.map(lbl => {
+              const active = selected.includes(lbl)
+              const s = active ? activeStyle : inactive
+              return (
+                <button key={lbl} onClick={() => toggleBubble(lbl)}
+                  style={{ padding: '6px 14px', borderRadius: 99, fontSize: 12, fontFamily: 'Inter, system-ui, sans-serif', cursor: 'pointer', fontWeight: active ? 500 : 400, border: `1px solid ${s.border}`, background: s.bg, color: s.color }}>
+                  {lbl}
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11, color: OHM.mutedLt, marginBottom: 6 }}>Additional notes (optional)</div>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Anything else worth capturing..." rows={3}
+            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${notes.trim() ? OHM.primary : OHM.line}`, borderRadius: 5, fontSize: 13, fontFamily: '"Source Serif 4", Georgia, serif', background: OHM.paper, outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: 14, color: OHM.ink, lineHeight: 1.6 }}
+          />
+        </>
+      )}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button onClick={handleConfirm} disabled={!canConfirm || saving} style={{ padding: '6px 16px', borderRadius: 4, border: `1px solid ${canConfirm ? OHM.primary : OHM.line}`, background: canConfirm ? OHM.primary : OHM.lineSoft, color: canConfirm ? '#fff' : OHM.mutedLt, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: canConfirm ? 'pointer' : 'not-allowed' }}>
+        <button onClick={handleConfirm} disabled={!canConfirm || saving}
+          style={{ padding: '7px 18px', borderRadius: 5, border: `1px solid ${canConfirm ? OHM.primary : OHM.line}`, background: canConfirm ? OHM.primary : OHM.lineSoft, color: canConfirm ? '#fff' : OHM.mutedLt, fontSize: 13, fontWeight: 500, fontFamily: 'Inter, system-ui, sans-serif', cursor: canConfirm ? 'pointer' : 'not-allowed' }}>
           {saving ? 'Saving...' : 'Confirm'}
         </button>
-        <button onClick={onCancel} style={{ padding: '6px 16px', borderRadius: 4, border: `1px solid ${OHM.line}`, background: OHM.paper, color: OHM.muted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-        {!canConfirm && ((!isMonitor) || voteDir) && <div style={{ fontSize: 11, color: OHM.mutedLt, width: '100%', marginTop: 4 }}>Select a reason to confirm.</div>}
+        <button onClick={onCancel}
+          style={{ padding: '7px 18px', borderRadius: 5, border: `1px solid ${OHM.line}`, background: OHM.paper, color: OHM.muted, fontSize: 13, fontFamily: 'Inter, system-ui, sans-serif', cursor: 'pointer' }}>
+          Cancel
+        </button>
+        {!canConfirm && ((!isMonitor) || voteDir) && (
+          <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11, color: OHM.mutedLt, width: '100%', marginTop: 4 }}>Select a reason to confirm.</div>
+        )}
       </div>
     </div>
   )
@@ -375,36 +481,78 @@ const REACTION_LABEL = {
   mon:  '◦ Monitoring',
 }
 
-export default function TopicRow({ topic, index, onReact, onUndo }) {
+export default function TopicRow({ topic, topics, index, readerIndex, setReaderIndex, onReact, onUndo }) {
   const [reaction,    setReaction]    = useState(null)
+  const [docUrl,      setDocUrl]      = useState(topic.draft_doc_url || null)
   const [activePanel, setActivePanel] = useState(null)
-  const [modalOpen,   setModalOpen]   = useState(false)
+  const readerOpen = readerIndex === index
   const [cardHover,   setCardHover]   = useState(false)
   const [saving,      setSaving]      = useState(false)
   const [saveError,   setSaveError]   = useState(null)
+  const pollingRef = useRef(false)
+
+  useEffect(() => {
+    if (topic.draft_doc_url) setDocUrl(topic.draft_doc_url)
+  }, [topic.draft_doc_url])
+
+  async function startDocUrlPoll() {
+    if (pollingRef.current) return
+    pollingRef.current = true
+    const url = await pollForDocUrl(topic.id)
+    pollingRef.current = false
+    if (url) setDocUrl(url)
+  }
+
+  function openReader() {
+    window._ohmScrollY = window.scrollY
+    setReaderIndex(index)
+  }
+
+  function closeReader() {
+    setReaderIndex(null)
+    requestAnimationFrame(() => window.scrollTo(0, window._ohmScrollY || 0))
+  }
+
+  const handleNavigate = useCallback((newIndex) => {
+    setReaderIndex(newIndex)
+  }, [setReaderIndex])
 
   const cat  = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
   const done = !!reaction
   const reactionColor = (reaction === 'excl' || reaction === 'mon') ? OHM.roseInk : OHM.primary
 
-  const BRIEF_LIMIT = 160
+  const BRIEF_LIMIT  = 160
   const briefText    = topic.research_brief || ''
   const briefPreview = briefText.length > BRIEF_LIMIT ? briefText.slice(0, BRIEF_LIMIT) + '…' : briefText
-
-  // ── Persist helpers ──────────────────────────────────────────────────────────
 
   async function persistReaction(type, voteDir, bubbles, notes) {
     setSaving(true); setSaveError(null)
     const reasonText = bubbles.length > 0
       ? bubbles.join(', ') + (notes.trim() ? ' — ' + notes.trim() : '')
       : notes.trim()
-    const { error } = await supabase.from('reactions').insert({ topic_id: topic.id, reaction: type, reason: reasonText || null, vote_direction: voteDir, prompt_version: 'v1.1' })
-    if (error) setSaveError('Failed to save — try again')
-    else onReact()
-    setSaving(false)
+    const { error } = await supabase.from('reactions').insert({
+      topic_id:       topic.id,
+      reaction:       type,
+      tier:           TIER_FROM_TYPE[type] ?? null,
+      reason:         reasonText || null,
+      vote_direction: voteDir,
+      prompt_version: 'v1.1',
+    })
+    if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
+
+    if (type === 'draft_queued') {
+      await supabase.from('topics').update({ feed_status: 'drafted' }).eq('id', topic.id)
+    }
+    if (type === 'exclude') {
+      await supabase.from('topics').update({ feed_status: 'excluded' }).eq('id', topic.id)
+    }
+
+    onReact(); setSaving(false)
   }
 
-  async function handleSupport() { setReaction('supp'); await persistReaction('supporting', null, [], '') }
+  async function handleSupport() {
+    setReaction('supp'); await persistReaction('supporting', null, [], '')
+  }
 
   async function handleTriageConfirm(voteDir, bubbles, notes) {
     const type = activePanel === 'monitor' ? 'monitor' : 'exclude'
@@ -413,58 +561,48 @@ export default function TopicRow({ topic, index, onReact, onUndo }) {
     await persistReaction(type, activePanel === 'monitor' ? voteDir : null, bubbles, notes)
   }
 
-  function handleDraftSent() { setActivePanel(null); setReaction('full'); onReact() }
+  function handleDraftSent() {
+    setActivePanel(null); setReaction('full'); onReact(); startDocUrlPoll()
+  }
 
-  async function handleUndo() {
-    setReaction(null); setActivePanel(null); setSaveError(null)
-    const { data } = await supabase.from('topics').select('draft_doc_url').eq('id', topic.id).single()
-    const docUrl = data?.draft_doc_url
-    await Promise.all([
-      supabase.from('topics').update({ draft_doc_url: null }).eq('id', topic.id),
-      supabase.from('reactions').delete().eq('topic_id', topic.id).eq('reaction', 'draft_queued'),
-    ])
-    if (docUrl) fireAppsScript({ action: 'delete', doc_url: docUrl })
-    onUndo()
+  const [confirmUndoOpen, setConfirmUndoOpen] = useState(false)
+  const undoingRef = useRef(false)
+
+  function handleUndo() {
+    if (undoingRef.current) return
+    setSaveError(null); setConfirmUndoOpen(true)
+  }
+
+  async function performUndo({ extraChecked: keepNotes }) {
+    if (undoingRef.current) return
+    undoingRef.current = true
+    const prev = reaction
+    setReaction(null); setActivePanel(null); setSaveError(null); setDocUrl(null)
+    const r = await undoReaction({ topicId: topic.id, reaction: prev, keepNotes })
+    undoingRef.current = false
+    if (r.ok) { setConfirmUndoOpen(false); onUndo() }
+    else { setReaction(prev); setSaveError(r.error); throw new Error(r.error) }
   }
 
   return (
     <>
-      {/* ─── Keyframes (injected once per row but harmless) ─── */}
-      <style>{`
-        @keyframes ohmFadeIn  { from { opacity:0 } to { opacity:1 } }
-        @keyframes ohmSlideUp {
-          from { opacity:0; transform:translate(-50%,calc(-50% + 16px)) }
-          to   { opacity:1; transform:translate(-50%,-50%) }
-        }
-      `}</style>
+      <style>{`.ohm-draft-link:hover { background: #c8dbbf !important; }`}</style>
 
-      {/* ─── Card wrapper — this is what "pops" on hover ─── */}
-      <article
-        style={{
-          padding:       '22px 20px',
-          borderRadius:  8,
-          marginBottom:  4,
-          borderTop:     `1px solid ${OHM.lineSoft}`,
-          opacity:       done ? 0.55 : 1,
-          // ↓ the bubble-lift effect: translateY + shadow, like the Bubble.io cards
-          transform:     cardHover ? 'translateY(-3px)' : 'translateY(0)',
-          boxShadow:     cardHover
-            ? `0 8px 24px rgba(12,24,18,0.10), 0 2px 8px rgba(12,24,18,0.06)`
-            : '0 0 0 transparent',
-          background:    cardHover ? '#FEFEFE' : OHM.paper,
-          transition:    'transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, opacity 0.2s',
-        }}
-      >
+      <article style={{
+        padding: '22px 20px', borderRadius: 8, marginBottom: 4,
+        borderTop: `1px solid ${OHM.lineSoft}`,
+        opacity: done ? 0.55 : 1,
+        transform: cardHover ? 'translateY(-3px)' : 'translateY(0)',
+        boxShadow: cardHover ? '0 8px 24px rgba(12,24,18,0.10), 0 2px 8px rgba(12,24,18,0.06)' : '0 0 0 transparent',
+        background: cardHover ? '#FEFEFE' : OHM.paper,
+        transition: 'transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, opacity 0.2s',
+      }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
-
-          {/* Index */}
           <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 26, color: OHM.mutedLt, width: 36, fontWeight: 400, fontFeatureSettings: '"tnum"', lineHeight: 1, flexShrink: 0 }}>
             {String(index + 1).padStart(2, '0')}
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-
-            {/* Meta row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
               {topic.category && (
                 <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', padding: '2px 8px', borderRadius: 3, background: cat.bg, color: cat.ink, border: `1px solid ${cat.line}` }}>
@@ -473,78 +611,78 @@ export default function TopicRow({ topic, index, onReact, onUndo }) {
               )}
               <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
               <span style={{ fontSize: 11, color: OHM.muted }}>{topic.status}</span>
-              {topic.batch_id && (<>
-                <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
-                <span style={{ fontSize: 11, color: OHM.muted, fontFeatureSettings: '"tnum"' }}>{topic.batch_id}</span>
-              </>)}
-              {done && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: reactionColor }}>{REACTION_LABEL[reaction]}</span>}
+              {topic.batch_id && (<><span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span><span style={{ fontSize: 11, color: OHM.muted, fontFeatureSettings: '"tnum"' }}>{topic.batch_id}</span></>)}
+              {done && <span style={{ fontSize: 11, fontWeight: 600, color: reactionColor }}>{REACTION_LABEL[reaction]}</span>}
+              {docUrl && (
+                <a href={docUrl} target="_blank" rel="noopener noreferrer" className="ohm-draft-link" onClick={e => e.stopPropagation()}
+                  style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: OHM.primary, background: OHM.sage, border: `1px solid ${OHM.sageDeep}`, borderRadius: 4, padding: '4px 10px', textDecoration: 'none', minHeight: 28, whiteSpace: 'nowrap', transition: 'background 0.15s ease' }}>
+                  Open Draft ↗
+                </a>
+              )}
             </div>
 
-            {/* ── Title — hover triggers card lift, click opens modal ── */}
-            <h2
-              onClick={() => setModalOpen(true)}
-              onMouseEnter={() => setCardHover(true)}
-              onMouseLeave={() => setCardHover(false)}
-              style={{
-                fontFamily:  '"Source Serif 4", Georgia, serif',
-                fontSize:    21, fontWeight: 400, margin: '0 0 8px 0',
-                letterSpacing: -0.3, lineHeight: 1.25,
-                color:   cardHover ? OHM.primary : OHM.ink,
-                cursor:  'pointer',
-                transition: 'color 0.18s ease',
-              }}
-            >
+            <h2 onClick={openReader} onMouseEnter={() => setCardHover(true)} onMouseLeave={() => setCardHover(false)}
+              style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 21, fontWeight: 400, margin: '0 0 8px 0', letterSpacing: -0.3, lineHeight: 1.25, color: cardHover ? OHM.primary : OHM.ink, cursor: 'pointer', transition: 'color 0.18s ease' }}>
               {topic.title}
             </h2>
 
-            {/* Brief preview */}
             {briefText && (
-              <p style={{ fontSize: 13.5, color: OHM.muted, margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
-                {briefPreview}
-              </p>
+              <p style={{ fontSize: 13.5, color: OHM.muted, margin: 0, lineHeight: 1.6, maxWidth: 680 }}>{briefPreview}</p>
             )}
 
-            {/* Signal tags */}
             {topic.signals?.length > 0 && (
               <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                 {topic.signals.map(s => (
-                  <span key={s} style={{ fontSize: 10.5, color: OHM.muted, padding: '2px 8px', border: `1px solid ${OHM.line}`, borderRadius: 99, background: OHM.paper, letterSpacing: 0.1 }}>
-                    o {s}
-                  </span>
+                  <span key={s} style={{ fontSize: 10.5, color: OHM.muted, padding: '2px 8px', border: `1px solid ${OHM.line}`, borderRadius: 99, background: OHM.paper, letterSpacing: 0.1 }}>o {s}</span>
                 ))}
               </div>
             )}
 
-            {/* Inline panels */}
             {activePanel === 'draft' && <DraftPanel topic={topic} onSent={handleDraftSent} onCancel={() => setActivePanel(null)} />}
             {(activePanel === 'monitor' || activePanel === 'exclude') && <TriagePanel kind={activePanel} onConfirm={handleTriageConfirm} onCancel={() => setActivePanel(null)} />}
 
             {saveError && <div style={{ fontSize: 11, color: OHM.roseInk, marginTop: 6 }}>{saveError}</div>}
 
-            {/* Action buttons */}
             <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               {done ? (
-                <button onClick={handleUndo} style={{ fontSize: 12, color: OHM.muted, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>Undo</button>
-              ) : (!activePanel && (<>
-                <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
-                <TriageBtn kind="supp" onClick={handleSupport}                   disabled={saving}>Support</TriageBtn>
-                <TriageBtn kind="mon"  onClick={() => setActivePanel('monitor')} disabled={saving}>Monitor</TriageBtn>
-                <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
-              </>))}
+                <button onClick={handleUndo} style={{ fontSize: 12, color: OHM.muted, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
+                  {reaction === 'full' && docUrl ? 'Archive Draft' : 'Undo'}
+                </button>
+              ) : (
+                !activePanel && (
+                  <>
+                    <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
+                    <TriageBtn kind="supp" onClick={handleSupport}                   disabled={saving}>Support</TriageBtn>
+                    <TriageBtn kind="mon"  onClick={() => setActivePanel('monitor')} disabled={saving}>Monitor</TriageBtn>
+                    <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
+                  </>
+                )
+              )}
             </div>
-
           </div>
         </div>
       </article>
 
-      {/* Modal portal */}
-      {modalOpen && (
-        <TopicModal
-          topic={topic}
-          reaction={reaction}
+      {readerOpen && (
+        <TopicReader
+          topic={topic} topics={topics || [topic]} currentIndex={index}
+          reaction={reaction} docUrl={docUrl}
           onReact={onReact}
-          onUndo={() => { setReaction(null); onUndo() }}
-          onClose={() => setModalOpen(false)}
+          onUndo={() => { setReaction(null); setDocUrl(null); onUndo() }}
+          onClose={closeReader} onNavigate={handleNavigate}
+        />
+      )}
+
+      {confirmUndoOpen && (
+        <ConfirmModal
+          title={reaction === 'full' ? 'Archive this draft?' : 'Undo this reaction?'}
+          body={reaction === 'full'
+            ? 'This will remove the Draft and move its Google Doc to the Archived Drafts folder. The Doc is archived, not deleted — you can restore it from Drive if needed.'
+            : 'This will clear the reaction. You can re-triage this topic immediately after.'}
+          confirmLabel={reaction === 'full' ? 'Archive Draft' : 'Undo'}
+          extraOption={reaction === 'full' ? { label: 'Keep my notes for next time', defaultChecked: true } : null}
+          onConfirm={performUndo}
+          onCancel={() => setConfirmUndoOpen(false)}
         />
       )}
     </>
