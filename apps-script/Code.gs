@@ -115,7 +115,7 @@ function handleCreate(data) {
 
   // Write URL back to Supabase
   if (topicId) {
-    UrlFetchApp.fetch(`${SUPABASE_URL}/rest/v1/topics?id=eq.${topicId}`, {
+    UrlFetchApp.fetch(`${SUPABASE_URL}/rest/v1/topic_cards?id=eq.${topicId}`, {
       method:  'PATCH',
       headers: {
         'Content-Type':  'application/json',

@@ -3,17 +3,19 @@ import { supabase } from '../supabase'
 
 export function useTopicCards() {
   const [cards,     setCards]     = useState([])
-  const [loading,   setLoading]   = useState(false)
+  const [loading,   setLoading]   = useState(true)
   const [error,     setError]     = useState(null)
   const [lastToast, setLastToast] = useState(null)
 
-  const loadLatest = useCallback(async () => {
+const loadLatest = useCallback(async () => {
+    setLoading(true)
     const { data, error: fetchErr } = await supabase
       .from('topic_cards')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(10)
     if (!fetchErr && data) setCards(data)
+    setLoading(false)
   }, [])
 
   const regenerate = useCallback(async ({ category, context } = {}) => {

@@ -87,10 +87,10 @@ function TopicReader({
     if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
 
     if (type === 'draft_queued') {
-      await supabase.from('topics').update({ feed_status: 'drafted' }).eq('id', topic.id)
+      await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
     }
     if (type === 'exclude') {
-      await supabase.from('topics').update({ feed_status: 'excluded' }).eq('id', topic.id)
+      await supabase.from('topic_cards').update({ feed_status: 'excluded' }).eq('id', topic.id)
     }
 
     onReact(); setSaving(false)
@@ -178,8 +178,6 @@ function TopicReader({
                   {topic.category}
                 </span>
               )}
-              {topic.status && (<><span style={{ color: OHM.mutedLt, fontWeight: 400 }}>·</span><span style={{ fontWeight: 500 }}>{topic.status}</span></>)}
-              {topic.batch_id && (<><span style={{ color: OHM.mutedLt, fontWeight: 400 }}>·</span><span style={{ fontFeatureSettings: '"tnum"', fontWeight: 500 }}>{topic.batch_id}</span></>)}
             </div>
 
             <h1 style={{
@@ -193,15 +191,7 @@ function TopicReader({
             <p style={{
               fontFamily: '"Source Serif 4", Georgia, serif',
               fontSize: 'clamp(17px, 1.6vw, 19px)', color: OHM.ink, lineHeight: 1.7, margin: 0, fontWeight: 400,
-            }}>{topic.research_brief || '—'}</p>
-
-            {topic.signals?.length > 0 && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 28 }}>
-                {topic.signals.map(s => (
-                  <span key={s} style={{ fontSize: 11.5, color: OHM.muted, padding: '4px 12px', borderRadius: 99, border: `1px solid ${OHM.line}`, background: OHM.paper, letterSpacing: '0.02em' }}>{s}</span>
-                ))}
-              </div>
-            )}
+              }}>{topic.brief || '—'}</p>
 
             <aside style={{ marginTop: 56, padding: '24px 28px', borderRadius: 10, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
               <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 18 }}>About this piece</div>
@@ -327,7 +317,7 @@ function DraftPanel({ topic, onSent, onCancel }) {
       vote_direction: null, prompt_version: 'v1.1',
     })
     if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
-    await supabase.from('topics').update({ feed_status: 'drafted' }).eq('id', topic.id)
+    await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
     onSent(); setSaving(false)
   }
 
@@ -341,9 +331,9 @@ function DraftPanel({ topic, onSent, onCancel }) {
         vote_direction: null, prompt_version: 'v1.1',
       })
       if (reactionError) { setSaveError('Failed to save reaction — try again'); setSaving(false); return }
-      await supabase.from('topics').update({ feed_status: 'drafted' }).eq('id', topic.id)
+      await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
       fireAppsScript({
-        title: topic.title, brief: topic.research_brief || '',
+        title: topic.title, brief: topic.brief || '',
         notes: draftNotes.trim(), topic_id: topic.id,
         status: topic.status || '', category: topic.category || '',
         batch_id: topic.batch_id || '',
@@ -522,7 +512,7 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
   const reactionColor = (reaction === 'excl' || reaction === 'mon') ? OHM.roseInk : OHM.primary
 
   const BRIEF_LIMIT  = 160
-  const briefText    = topic.research_brief || ''
+  const briefText    = topic.brief || ''
   const briefPreview = briefText.length > BRIEF_LIMIT ? briefText.slice(0, BRIEF_LIMIT) + '…' : briefText
 
   async function persistReaction(type, voteDir, bubbles, notes) {
@@ -541,10 +531,10 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
     if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
 
     if (type === 'draft_queued') {
-      await supabase.from('topics').update({ feed_status: 'drafted' }).eq('id', topic.id)
+      await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
     }
     if (type === 'exclude') {
-      await supabase.from('topics').update({ feed_status: 'excluded' }).eq('id', topic.id)
+      await supabase.from('topic_cards').update({ feed_status: 'excluded' }).eq('id', topic.id)
     }
 
     onReact(); setSaving(false)
@@ -610,8 +600,6 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
                 </span>
               )}
               <span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span>
-              <span style={{ fontSize: 11, color: OHM.muted }}>{topic.status}</span>
-              {topic.batch_id && (<><span style={{ fontSize: 11, color: OHM.mutedLt }}>·</span><span style={{ fontSize: 11, color: OHM.muted, fontFeatureSettings: '"tnum"' }}>{topic.batch_id}</span></>)}
               {done && <span style={{ fontSize: 11, fontWeight: 600, color: reactionColor }}>{REACTION_LABEL[reaction]}</span>}
               {docUrl && (
                 <a href={docUrl} target="_blank" rel="noopener noreferrer" className="ohm-draft-link" onClick={e => e.stopPropagation()}
@@ -628,14 +616,6 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
 
             {briefText && (
               <p style={{ fontSize: 13.5, color: OHM.muted, margin: 0, lineHeight: 1.6, maxWidth: 680 }}>{briefPreview}</p>
-            )}
-
-            {topic.signals?.length > 0 && (
-              <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-                {topic.signals.map(s => (
-                  <span key={s} style={{ fontSize: 10.5, color: OHM.muted, padding: '2px 8px', border: `1px solid ${OHM.line}`, borderRadius: 99, background: OHM.paper, letterSpacing: 0.1 }}>o {s}</span>
-                ))}
-              </div>
             )}
 
             {activePanel === 'draft' && <DraftPanel topic={topic} onSent={handleDraftSent} onCancel={() => setActivePanel(null)} />}

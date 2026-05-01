@@ -17,7 +17,7 @@ export async function undoReaction({ topicId, reaction, keepNotes = false }) {
 
     if (reaction === 'full') {
       const { data: topicRow, error: fetchErr } = await supabase
-        .from('topics').select('draft_doc_url').eq('id', topicId).maybeSingle()
+        .from('topic_cards').select('draft_doc_url').eq('id', topicId).maybeSingle()
       if (fetchErr) throw new Error(`Fetch topic failed: ${fetchErr.message}`)
       docUrl = topicRow?.draft_doc_url || null
 
@@ -46,7 +46,7 @@ export async function undoReaction({ topicId, reaction, keepNotes = false }) {
     // Reset feed_status + null draft_doc_url for drafts
     if (reaction === 'full') {
       const { error: topicErr } = await supabase
-        .from('topics')
+        .from('topic_cards')
         .update({ draft_doc_url: null, feed_status: 'in_feed' })
         .eq('id', topicId)
       if (topicErr) throw new Error(`Topic update failed: ${topicErr.message}`)
@@ -55,7 +55,7 @@ export async function undoReaction({ topicId, reaction, keepNotes = false }) {
     // Reset feed_status for exclude undo
     if (reaction === 'excl') {
       const { error: topicErr } = await supabase
-        .from('topics')
+        .from('topic_cards')
         .update({ feed_status: 'in_feed' })
         .eq('id', topicId)
       if (topicErr) throw new Error(`Topic update failed: ${topicErr.message}`)

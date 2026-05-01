@@ -195,7 +195,7 @@ export default async function handler(req, res) {
 
     const { error: insertError } = await supabase
       .from('topic_cards')
-      .upsert(rows, { onConflict: 'source_url', ignoreDuplicates: true })
+      .insert(rows)
 
     if (insertError) {
       console.error('[generate-topic-cards] Supabase insert error:', insertError)

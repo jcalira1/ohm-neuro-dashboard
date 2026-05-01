@@ -18,8 +18,9 @@ const STAT_CONFIG = topics => [
 export default function App() {
 
   // ── useTopicCards hook (must be first) ──
-  const {
-    loading:  genLoading,
+const {
+    cards:    topics,
+    loading,
     error:    genError,
     lastToast,
     loadLatest,
@@ -27,8 +28,6 @@ export default function App() {
   } = useTopicCards()
 
   // ── All useState hooks ──
-  const [topics,       setTopics]       = useState([])
-  const [loading,      setLoading]      = useState(true)
   const [reactedCount, setReactedCount] = useState(0)
   const [grouping,     setGrouping]     = useState('none')
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
@@ -42,20 +41,6 @@ export default function App() {
     const handler = () => setIsMobile(window.innerWidth < 768)
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
-  }, [])
-
-  useEffect(() => {
-    async function fetchTopics() {
-      const { data, error } = await supabase
-        .from('topic_cards')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10)
-      if (error) console.error('Supabase error:', error)
-      else setTopics(data || [])
-      setLoading(false)
-    }
-    fetchTopics()
   }, [])
 
   const batchId = topics[0]?.prompt_version || '—'

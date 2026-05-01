@@ -15,19 +15,13 @@ export function getWeekLabel() {
 
 // ─── Topic grouping ───────────────────────────────────────────────────────────
 
-import { STATUSES } from '../constants'
-
 export function groupTopics(topics, grouping) {
   if (grouping === 'category') {
     const map = {}
     topics.forEach(t => { (map[t.category] = map[t.category] || []).push(t) })
     return Object.entries(map).map(([k, items]) => ({ key: k, label: k, items }))
   }
-  if (grouping === 'status') {
-    const map = {}
-    topics.forEach(t => { (map[t.status] = map[t.status] || []).push(t) })
-    return STATUSES.filter(s => map[s]).map(s => ({ key: s, label: s, items: map[s] }))
-  }
+
   return [{ key: 'all', label: 'All topics', items: topics }]
 }
 
@@ -59,7 +53,7 @@ export async function pollForDocUrl(topicId, attempts = 10, intervalMs = 2000) {
   for (let i = 0; i < attempts; i++) {
     await new Promise(r => setTimeout(r, intervalMs))
     const { data } = await supabase
-      .from('topics')
+      .from('topic_cards')
       .select('draft_doc_url')
       .eq('id', topicId)
       .single()
