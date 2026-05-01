@@ -62,7 +62,7 @@ function buildUserPrompt(category, context) {
 
   return `${categoryClause} ${contextClause}
 
-Generate exactly 10 topic cards. Return this exact JSON structure with no other text:
+Generate exactly 10 topic cards. Return this exact JSON structure with no other text, no markdown, no code fences:
 
 {
   "cards": [
@@ -77,7 +77,7 @@ Generate exactly 10 topic cards. Return this exact JSON structure with no other 
       "sources": [
         { "type": "peer-reviewed", "description": "Journal name, lead author, approximate year" }
       ],
-      "source_url": "https://doi.org/... or null if not available",
+      "source_url": null,
       "signal_summary": "FULL PIECE — one sentence why, OR SUPPORTING REFERENCE — one sentence, OR MONITOR — one sentence",
       "category": "One of: Clinical & Psychiatric | Intervention & Neuromodulation | Lifestyle, Systems & Optimization | Psychedelics & Novel Therapeutics | Emerging & Frontier | Neuroscience"
     }
@@ -107,6 +107,34 @@ async function callAnthropicWithRetry(category, context, retries = 2) {
   }
 }
 
+function extractJSON(rawText) {
+  // Try direct parse first
+  try {
+    return JSON.parse(rawText.trim())
+  } catch {}
+
+  // Strip markdown fences
+  const stripped = rawText
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+
+  try {
+    return JSON.parse(stripped)
+  } catch {}
+
+  // Extract first JSON object found
+  const match = stripped.match(/\{[\s\S]*\}/)
+  if (match) {
+    try {
+      return JSON.parse(match[0])
+    } catch {}
+  }
+
+  return null
+}
+
 function validateCards(cards) {
   if (!Array.isArray(cards) || cards.length !== 10) return false
   return cards.every(c =>
@@ -134,33 +162,35 @@ export default async function handler(req, res) {
   const { category, context } = req.body || {}
 
   try {
+    console.log('[generate-topic-cards] Starting generation...')
+
     const response = await callAnthropicWithRetry(category, context)
     const rawText  = response.content[0]?.text || ''
 
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/)
-    const cleaned = jsonMatch ? jsonMatch[0].trim() : rawText.trim()
+    console.log('[generate-topic-cards] Raw text first 300 chars:', rawText.slice(0, 300))
 
-    let parsed
-    try {
-      parsed = JSON.parse(cleaned)
-    } catch {
+    const parsed = extractJSON(rawText)
+
+    if (!parsed) {
+      console.error('[generate-topic-cards] JSON extraction failed. Raw:', rawText.slice(0, 500))
       return res.status(502).json({ error: 'Model returned malformed JSON. Try again.' })
     }
 
     const cards = parsed?.cards
     if (!validateCards(cards)) {
+      console.error('[generate-topic-cards] Schema validation failed. Cards:', JSON.stringify(cards)?.slice(0, 300))
       return res.status(502).json({ error: 'Model response did not match expected schema.' })
     }
 
     const rows = cards.map(c => ({
-      title:             c.title,
-      brief:             c.brief,
-      claims:            c.key_claims,
-      sources:           c.sources,
-      signal_summary:    c.signal_summary,
-      category:          c.category,
-      prompt_version:    PROMPT_VERSION,
-      source_url:        c.source_url || null,
+      title:          c.title,
+      brief:          c.brief,
+      claims:         c.key_claims,
+      sources:        c.sources,
+      signal_summary: c.signal_summary,
+      category:       c.category,
+      prompt_version: PROMPT_VERSION,
+      source_url:     c.source_url || null,
     }))
 
     const { error: insertError } = await supabase
@@ -168,12 +198,15 @@ export default async function handler(req, res) {
       .upsert(rows, { onConflict: 'source_url', ignoreDuplicates: true })
 
     if (insertError) {
+      console.error('[generate-topic-cards] Supabase insert error:', insertError)
       return res.status(500).json({ error: 'Failed to persist cards to database.' })
     }
 
+    console.log('[generate-topic-cards] Successfully inserted cards.')
     return res.status(200).json({ cards })
 
   } catch (err) {
+    console.error('[generate-topic-cards] Unexpected error:', err)
     return res.status(500).json({ error: err?.message || 'Unexpected server error.' })
   }
 }
