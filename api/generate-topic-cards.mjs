@@ -137,11 +137,8 @@ export default async function handler(req, res) {
     const response = await callAnthropicWithRetry(category, context)
     const rawText  = response.content[0]?.text || ''
 
-    const cleaned = rawText
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/\s*```$/i, '')
-      .trim()
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+    const cleaned = jsonMatch ? jsonMatch[0].trim() : rawText.trim()
 
     let parsed
     try {
