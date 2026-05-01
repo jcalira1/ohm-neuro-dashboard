@@ -90,7 +90,7 @@ async function callAnthropicWithRetry(category, context, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await anthropic.messages.create({
-        model:      'claude-sonnet-4-5',
+        model:      'claude-sonnet-4-6',
         max_tokens: 4096,
         system:     SYSTEM_PROMPT,
         messages:   [{ role: 'user', content: buildUserPrompt(category, context) }],
