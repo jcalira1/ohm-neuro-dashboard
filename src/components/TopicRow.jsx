@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../supabase'
 import { OHM, CAT_STYLE } from '../tokens'
-import { MONITOR_BUBBLES, SHARED_FOLDER_URL } from '../constants'
+import { MONITOR_BUBBLES, EXCLUDE_QUALIFIERS, SHARED_FOLDER_URL } from '../constants'
 import { fireAppsScript, pollForDocUrl } from '../utils/helpers'
 import TriageBtn from './TriageBtn'
 
@@ -324,7 +324,7 @@ function TriagePanel({ kind, onConfirm, onCancel }) {
     ? { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
     : { border: OHM.primary,  bg: OHM.sage,   color: OHM.primary }
   const inactive = { border: OHM.line, bg: OHM.paper, color: OHM.muted }
-  const bubbleList = isMonitor ? (voteDir ? BUBBLES[voteDir] : []) : BUBBLES.exclude
+  const bubbleList = isMonitor ? (voteDir ? MONITOR_BUBBLES[voteDir] : []) : EXCLUDE_QUALIFIERS
 
   function toggleBubble(lbl) { setSelected(p => p.includes(lbl) ? p.filter(b => b !== lbl) : [...p, lbl]) }
   async function handleConfirm() { setSaving(true); await onConfirm(voteDir, selected, notes); setSaving(false) }
