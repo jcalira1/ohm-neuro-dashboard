@@ -31,9 +31,8 @@ export default function App() {
   useEffect(() => {
     async function fetchTopics() {
       const { data, error } = await supabase
-        .from('topics')
+        .from('topic_cards')
         .select('*')
-        .eq('feed_status', 'in_feed')
         .order('created_at', { ascending: false })
         .limit(10)
       if (error) console.error('Supabase error:', error)
