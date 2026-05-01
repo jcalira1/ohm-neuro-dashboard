@@ -33,6 +33,7 @@ export default function App() {
       const { data, error } = await supabase
         .from('topics')
         .select('*')
+        .eq('feed_status', 'in_feed')
         .order('created_at', { ascending: false })
         .limit(10)
       if (error) console.error('Supabase error:', error)
