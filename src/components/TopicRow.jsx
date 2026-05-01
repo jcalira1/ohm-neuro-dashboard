@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../supabase'
 import { OHM, CAT_STYLE } from '../tokens'
-import { BUBBLES, SHARED_FOLDER_URL } from '../constants'
+import { MONITOR_BUBBLES, SHARED_FOLDER_URL } from '../constants'
 import { fireAppsScript, pollForDocUrl } from '../utils/helpers'
 import TriageBtn from './TriageBtn'
 
