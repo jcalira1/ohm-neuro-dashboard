@@ -9,9 +9,8 @@ import TopicRow     from './components/TopicRow'
 const WEEK_LABEL = getWeekLabel()
 
 const STAT_CONFIG = topics => [
-  ['Topics',     topics.length,                                                        OHM.primary],
-  ['Researching',topics.filter(t => t.status === 'Researching').length,                OHM.blueInk],
-  ['Drafting',   topics.filter(t => ['Drafting', 'Editing'].includes(t.status)).length, OHM.roseInk],
+  ['Cards',    topics.length,  OHM.primary],
+  ['Reviewed', 0,              OHM.blueInk],
 ]
 
 export default function App() {
@@ -42,7 +41,7 @@ export default function App() {
     fetchTopics()
   }, [])
 
-  const batchId = topics.find(t => t.batch_id)?.batch_id
+  const batchId = topics[0]?.prompt_version || '—'
   const groups  = groupTopics(topics, grouping)
   const stats   = [
     ...STAT_CONFIG(topics),
