@@ -3,8 +3,7 @@ import { fireAppsScript } from './helpers'
 
 const REACTION_DB_MAP = {
   full: 'draft_queued',
-  supp: 'supporting',
-  mon:  'monitor',
+  soft: 'soft_yes',
   excl: 'exclude',
 }
 

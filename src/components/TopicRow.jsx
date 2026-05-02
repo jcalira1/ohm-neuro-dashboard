@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../supabase'
 import { OHM, CAT_STYLE } from '../tokens'
-import { MONITOR_BUBBLES, EXCLUDE_QUALIFIERS, SHARED_FOLDER_URL } from '../constants'
+import { EXCLUDE_QUALIFIERS, SHARED_FOLDER_URL } from '../constants'
 import { fireAppsScript, pollForDocUrl } from '../utils/helpers'
 import { undoReaction } from '../utils/undo'
 import TriageBtn from './TriageBtn'
@@ -12,8 +12,7 @@ import ConfirmModal from './ConfirmModal'
 
 const TIER_FROM_TYPE = {
   draft_queued: 1,
-  supporting:   2,
-  monitor:      3,
+  soft_yes:     2,
   exclude:      null,
 }
 
@@ -38,14 +37,13 @@ function TopicReader({
 
   const done       = !!localRxn || !!localDocUrl
   const isDraftish = localRxn === 'full' || (!localRxn && !!localDocUrl)
-  const isNegative = localRxn === 'excl' || localRxn === 'mon'
+  const isNegative = localRxn === 'excl'
   const reactionColor = isNegative ? OHM.roseInk : OHM.primary
 
   const REACTION_LABEL = {
     full: '✓ Draft queued',
-    supp: '✓ Added as Support',
+    soft: '✓ Soft-yes',
     excl: '✗ Excluded',
-    mon:  '◦ Monitoring',
   }
   const statusPillText = localRxn
     ? REACTION_LABEL[localRxn]
@@ -71,7 +69,7 @@ function TopicReader({
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }, [topic.id])
 
-  async function persistReaction(type, voteDir, bubbles, notes) {
+  async function persistReaction(type, bubbles, notes) {
     setSaving(true); setSaveError(null)
     const reasonText = bubbles.length > 0
       ? bubbles.join(', ') + (notes.trim() ? ' — ' + notes.trim() : '')
@@ -81,8 +79,7 @@ function TopicReader({
       reaction:       type,
       tier:           TIER_FROM_TYPE[type] ?? null,
       reason:         reasonText || null,
-      vote_direction: voteDir,
-      prompt_version: 'v1.1',
+      prompt_version: 'v2.0',
     })
     if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
 
@@ -96,16 +93,14 @@ function TopicReader({
     onReact(); setSaving(false)
   }
 
-  async function handleSupport() {
-    setLocalRxn('supp'); setActivePanel(null)
-    await persistReaction('supporting', null, [], '')
+  async function handleSoftYes() {
+    setLocalRxn('soft'); setActivePanel(null)
+    await persistReaction('soft_yes', [], '')
   }
 
-  async function handleTriageConfirm(voteDir, bubbles, notes) {
-    const type = activePanel === 'monitor' ? 'monitor' : 'exclude'
-    setLocalRxn(activePanel === 'monitor' ? 'mon' : 'excl')
-    setActivePanel(null)
-    await persistReaction(type, activePanel === 'monitor' ? voteDir : null, bubbles, notes)
+  async function handleExcludeConfirm(bubbles, notes) {
+    setLocalRxn('excl'); setActivePanel(null)
+    await persistReaction('exclude', bubbles, notes)
   }
 
   function handleDraftSent() {
@@ -215,8 +210,8 @@ function TopicReader({
                   <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Not yet drafted</span>
                 )}
               </SpecsRow>
-              <SpecsRow label="Linked Support" last>
-                <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Will appear here once Support Tagging is live</span>
+              <SpecsRow label="Linked Soft-yes" last>
+                <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Will appear here once Soft-yes linking is live</span>
               </SpecsRow>
             </aside>
           </article>
@@ -229,9 +224,9 @@ function TopicReader({
               <DraftPanel topic={topic} onSent={handleDraftSent} onCancel={() => setActivePanel(null)} />
             </div>
           )}
-          {(activePanel === 'monitor' || activePanel === 'exclude') && (
+          {activePanel === 'exclude' && (
             <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 24px 4px', animation: 'rdrFadeIn 0.18s ease' }}>
-              <TriagePanel kind={activePanel} onConfirm={handleTriageConfirm} onCancel={() => setActivePanel(null)} />
+              <ExcludePanel onConfirm={handleExcludeConfirm} onCancel={() => setActivePanel(null)} />
             </div>
           )}
 
@@ -253,8 +248,7 @@ function TopicReader({
                     <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.muted }}>Triage</div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
-                      <TriageBtn kind="supp" onClick={handleSupport}                   disabled={saving}>Support</TriageBtn>
-                      <TriageBtn kind="mon"  onClick={() => setActivePanel('monitor')} disabled={saving}>Monitor</TriageBtn>
+                      <TriageBtn kind="soft" onClick={handleSoftYes}                   disabled={saving}>Soft-yes</TriageBtn>
                       <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
                     </div>
                   </>
@@ -314,7 +308,7 @@ function DraftPanel({ topic, onSent, onCancel }) {
       topic_id: topic.id, reaction: 'draft_queued',
       tier: 1,
       reason: draftNotes.trim() || null,
-      vote_direction: null, prompt_version: 'v1.1',
+      prompt_version: 'v2.0',
     })
     if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
     await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
@@ -328,7 +322,7 @@ function DraftPanel({ topic, onSent, onCancel }) {
         topic_id: topic.id, reaction: 'draft_queued',
         tier: 1,
         reason: draftNotes.trim() || null,
-        vote_direction: null, prompt_version: 'v1.1',
+        prompt_version: 'v2.0',
       })
       if (reactionError) { setSaveError('Failed to save reaction — try again'); setSaving(false); return }
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
@@ -370,81 +364,45 @@ function DraftPanel({ topic, onSent, onCancel }) {
   )
 }
 
-// ─── TriagePanel ──────────────────────────────────────────────────────────────
+// ─── ExcludePanel ─────────────────────────────────────────────────────────────
 
-function TriagePanel({ kind, onConfirm, onCancel }) {
-  const [voteDir,  setVoteDir]  = useState(null)
+function ExcludePanel({ onConfirm, onCancel }) {
   const [selected, setSelected] = useState([])
   const [notes,    setNotes]    = useState('')
   const [saving,   setSaving]   = useState(false)
 
-  const isMonitor  = kind === 'monitor'
-  const canConfirm = isMonitor
-    ? voteDir !== null && (selected.length > 0 || notes.trim().length > 0)
-    : selected.length > 0 || notes.trim().length > 0
+  const canConfirm = selected.length > 0 || notes.trim().length > 0
 
-  const activeStyle = (!isMonitor || voteDir === 'down')
-    ? { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
-    : { border: OHM.primary,  bg: OHM.sage,   color: OHM.primary }
-  const inactive   = { border: OHM.line, bg: OHM.paper, color: OHM.muted }
-  const bubbleList = isMonitor ? (voteDir ? MONITOR_BUBBLES[voteDir] : []) : EXCLUDE_QUALIFIERS
+  const activeStyle = { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk }
+  const inactive    = { border: OHM.line,    bg: OHM.paper,   color: OHM.muted   }
 
   function toggleBubble(lbl) {
-    if (!isMonitor) {
-      // single-select for exclude
-      setSelected(p => p.includes(lbl) ? [] : [lbl])
-    } else {
-      setSelected(p => p.includes(lbl) ? p.filter(b => b !== lbl) : [...p, lbl])
-    }
+    setSelected(p => p.includes(lbl) ? [] : [lbl])
   }
 
   async function handleConfirm() {
-    setSaving(true); await onConfirm(voteDir, selected, notes); setSaving(false)
+    setSaving(true); await onConfirm(selected, notes); setSaving(false)
   }
 
   return (
     <div style={{ marginBottom: 20, padding: '20px 22px', borderRadius: 8, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
-      {isMonitor && (
-        <>
-          <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10, color: OHM.muted, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10, fontWeight: 700 }}>Signal strength</div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-            {[{ dir: 'up', label: '+ Worth watching' }, { dir: 'down', label: '- Low priority' }].map(({ dir, label }) => {
-              const s = voteDir === dir
-                ? (dir === 'up' ? { border: OHM.primary, bg: OHM.sage, color: OHM.primary } : { border: OHM.roseInk, bg: OHM.roseBg, color: OHM.roseInk })
-                : inactive
-              return (
-                <button key={dir} onClick={() => { setVoteDir(v => v === dir ? null : dir); setSelected([]) }}
-                  style={{ padding: '7px 18px', borderRadius: 99, fontSize: 13, fontFamily: 'Inter, system-ui, sans-serif', cursor: 'pointer', fontWeight: 500, border: `1px solid ${s.border}`, background: s.bg, color: s.color }}>
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-        </>
-      )}
-      {(!isMonitor || voteDir) && (
-        <>
-          <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10, color: OHM.muted, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10, fontWeight: 700 }}>
-            {!isMonitor ? 'Why this is a No' : voteDir === 'up' ? 'Why it is worth watching' : 'Why it is low priority'}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-            {bubbleList.map(lbl => {
-              const active = selected.includes(lbl)
-              const s = active ? activeStyle : inactive
-              return (
-                <button key={lbl} onClick={() => toggleBubble(lbl)}
-                  style={{ padding: '6px 14px', borderRadius: 99, fontSize: 12, fontFamily: 'Inter, system-ui, sans-serif', cursor: 'pointer', fontWeight: active ? 500 : 400, border: `1px solid ${s.border}`, background: s.bg, color: s.color }}>
-                  {lbl}
-                </button>
-              )
-            })}
-          </div>
-          <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11, color: OHM.mutedLt, marginBottom: 6 }}>Additional notes (optional)</div>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Anything else worth capturing..." rows={3}
-            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${notes.trim() ? OHM.primary : OHM.line}`, borderRadius: 5, fontSize: 13, fontFamily: '"Source Serif 4", Georgia, serif', background: OHM.paper, outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: 14, color: OHM.ink, lineHeight: 1.6 }}
-          />
-        </>
-      )}
+      <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 10, color: OHM.muted, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10, fontWeight: 700 }}>Why this is a No</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+        {EXCLUDE_QUALIFIERS.map(lbl => {
+          const active = selected.includes(lbl)
+          const s = active ? activeStyle : inactive
+          return (
+            <button key={lbl} onClick={() => toggleBubble(lbl)}
+              style={{ padding: '6px 14px', borderRadius: 99, fontSize: 12, fontFamily: 'Inter, system-ui, sans-serif', cursor: 'pointer', fontWeight: active ? 500 : 400, border: `1px solid ${s.border}`, background: s.bg, color: s.color }}>
+              {lbl}
+            </button>
+          )
+        })}
+      </div>
+      <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11, color: OHM.mutedLt, marginBottom: 6 }}>Additional notes (optional)</div>
+      <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Anything else worth capturing..." rows={3}
+        style={{ width: '100%', padding: '8px 10px', border: `1px solid ${notes.trim() ? OHM.primary : OHM.line}`, borderRadius: 5, fontSize: 13, fontFamily: '"Source Serif 4", Georgia, serif', background: OHM.paper, outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: 14, color: OHM.ink, lineHeight: 1.6 }}
+      />
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <button onClick={handleConfirm} disabled={!canConfirm || saving}
           style={{ padding: '7px 18px', borderRadius: 5, border: `1px solid ${canConfirm ? OHM.primary : OHM.line}`, background: canConfirm ? OHM.primary : OHM.lineSoft, color: canConfirm ? '#fff' : OHM.mutedLt, fontSize: 13, fontWeight: 500, fontFamily: 'Inter, system-ui, sans-serif', cursor: canConfirm ? 'pointer' : 'not-allowed' }}>
@@ -454,7 +412,7 @@ function TriagePanel({ kind, onConfirm, onCancel }) {
           style={{ padding: '7px 18px', borderRadius: 5, border: `1px solid ${OHM.line}`, background: OHM.paper, color: OHM.muted, fontSize: 13, fontFamily: 'Inter, system-ui, sans-serif', cursor: 'pointer' }}>
           Cancel
         </button>
-        {!canConfirm && ((!isMonitor) || voteDir) && (
+        {!canConfirm && (
           <div style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 11, color: OHM.mutedLt, width: '100%', marginTop: 4 }}>Select a reason to confirm.</div>
         )}
       </div>
@@ -466,9 +424,8 @@ function TriagePanel({ kind, onConfirm, onCancel }) {
 
 const REACTION_LABEL = {
   full: '✓ Draft',
-  supp: '✓ Support',
+  soft: '✓ Soft-yes',
   excl: '✗ No',
-  mon:  '◦ Monitoring',
 }
 
 export default function TopicRow({ topic, topics, index, readerIndex, setReaderIndex, onReact, onUndo }) {
@@ -509,13 +466,13 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
 
   const cat  = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
   const done = !!reaction
-  const reactionColor = (reaction === 'excl' || reaction === 'mon') ? OHM.roseInk : OHM.primary
+  const reactionColor = reaction === 'excl' ? OHM.roseInk : OHM.primary
 
   const BRIEF_LIMIT  = 160
   const briefText    = topic.brief || ''
   const briefPreview = briefText.length > BRIEF_LIMIT ? briefText.slice(0, BRIEF_LIMIT) + '…' : briefText
 
-  async function persistReaction(type, voteDir, bubbles, notes) {
+  async function persistReaction(type, bubbles, notes) {
     setSaving(true); setSaveError(null)
     const reasonText = bubbles.length > 0
       ? bubbles.join(', ') + (notes.trim() ? ' — ' + notes.trim() : '')
@@ -525,8 +482,7 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
       reaction:       type,
       tier:           TIER_FROM_TYPE[type] ?? null,
       reason:         reasonText || null,
-      vote_direction: voteDir,
-      prompt_version: 'v1.1',
+      prompt_version: 'v2.0',
     })
     if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
 
@@ -540,15 +496,13 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
     onReact(); setSaving(false)
   }
 
-  async function handleSupport() {
-    setReaction('supp'); await persistReaction('supporting', null, [], '')
+  async function handleSoftYes() {
+    setReaction('soft'); await persistReaction('soft_yes', [], '')
   }
 
-  async function handleTriageConfirm(voteDir, bubbles, notes) {
-    const type = activePanel === 'monitor' ? 'monitor' : 'exclude'
-    setReaction(activePanel === 'monitor' ? 'mon' : 'excl')
-    setActivePanel(null)
-    await persistReaction(type, activePanel === 'monitor' ? voteDir : null, bubbles, notes)
+  async function handleExcludeConfirm(bubbles, notes) {
+    setReaction('excl'); setActivePanel(null)
+    await persistReaction('exclude', bubbles, notes)
   }
 
   function handleDraftSent() {
@@ -619,7 +573,7 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
             )}
 
             {activePanel === 'draft' && <DraftPanel topic={topic} onSent={handleDraftSent} onCancel={() => setActivePanel(null)} />}
-            {(activePanel === 'monitor' || activePanel === 'exclude') && <TriagePanel kind={activePanel} onConfirm={handleTriageConfirm} onCancel={() => setActivePanel(null)} />}
+            {activePanel === 'exclude' && <ExcludePanel onConfirm={handleExcludeConfirm} onCancel={() => setActivePanel(null)} />}
 
             {saveError && <div style={{ fontSize: 11, color: OHM.roseInk, marginTop: 6 }}>{saveError}</div>}
 
@@ -632,8 +586,7 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
                 !activePanel && (
                   <>
                     <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
-                    <TriageBtn kind="supp" onClick={handleSupport}                   disabled={saving}>Support</TriageBtn>
-                    <TriageBtn kind="mon"  onClick={() => setActivePanel('monitor')} disabled={saving}>Monitor</TriageBtn>
+                    <TriageBtn kind="soft" onClick={handleSoftYes}                   disabled={saving}>Soft-yes</TriageBtn>
                     <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
                   </>
                 )

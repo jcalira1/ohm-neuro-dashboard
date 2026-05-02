@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
+import { buildPromptContext } from './lib/buildPromptContext.mjs'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -10,9 +11,9 @@ const supabase = createClient(
 
 let lastRequestTime = 0
 const RATE_LIMIT_MS = 30_000
-const PROMPT_VERSION = 'v1.1'
+const PROMPT_VERSION = 'v2.0'
 
-const SYSTEM_PROMPT = `You are a neuroscience content intelligence engine for Ohm Neuro.
+const BASE_SYSTEM_PROMPT = `You are a neuroscience content intelligence engine for Ohm Neuro.
 Generate exactly 10 high-signal neuroscience topic cards for a content team to evaluate.
 
 ## Topics to focus on
@@ -50,17 +51,10 @@ Generate exactly 10 high-signal neuroscience topic cards for a content team to e
 - Prioritize RCTs over observational studies
 - Deprioritize animal studies unless findings are very translational
 - Every card must reference a real or plausible recent study
-- Return ONLY valid JSON — no markdown, no preamble, no explanation.`
+- Return ONLY valid JSON — no markdown, no preamble, no explanation.
+- Skip any topic substantively similar to those listed under Previously Surfaced.`
 
-function buildUserPrompt(category, context) {
-  const categoryClause = category
-    ? `Focus specifically on the category: ${category}.`
-    : 'Cover a diverse mix of the neuroscience categories listed above.'
-  const contextClause = context
-    ? `Additional editorial context for this run: ${context}.`
-    : ''
-
-  return `${categoryClause} ${contextClause}
+const USER_PROMPT = `Cover a diverse mix of the neuroscience categories listed above.
 
 Generate exactly 10 topic cards. Return this exact JSON structure with no other text, no markdown, no code fences:
 
@@ -78,22 +72,21 @@ Generate exactly 10 topic cards. Return this exact JSON structure with no other 
         { "type": "peer-reviewed", "description": "Journal name, lead author, approximate year" }
       ],
       "source_url": null,
-      "signal_summary": "FULL PIECE — one sentence why, OR SUPPORTING REFERENCE — one sentence, OR MONITOR — one sentence",
+      "signal_summary": "FULL PIECE — one sentence why, OR SUPPORTING REFERENCE — one sentence",
       "category": "One of: Clinical & Psychiatric | Intervention & Neuromodulation | Lifestyle, Systems & Optimization | Psychedelics & Novel Therapeutics | Emerging & Frontier | Neuroscience"
     }
   ]
 }`
-}
 
-async function callAnthropicWithRetry(category, context, retries = 2) {
+async function callAnthropicWithRetry(systemPrompt, retries = 2) {
   const delays = [2000, 4000]
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await anthropic.messages.create({
         model:      'claude-sonnet-4-6',
         max_tokens: 4096,
-        system:     SYSTEM_PROMPT,
-        messages:   [{ role: 'user', content: buildUserPrompt(category, context) }],
+        system:     systemPrompt,
+        messages:   [{ role: 'user', content: USER_PROMPT }],
       })
       return response
     } catch (err) {
@@ -108,12 +101,10 @@ async function callAnthropicWithRetry(category, context, retries = 2) {
 }
 
 function extractJSON(rawText) {
-  // Try direct parse first
   try {
     return JSON.parse(rawText.trim())
   } catch {}
 
-  // Strip markdown fences
   const stripped = rawText
     .replace(/^```json\s*/i, '')
     .replace(/^```\s*/i, '')
@@ -124,7 +115,6 @@ function extractJSON(rawText) {
     return JSON.parse(stripped)
   } catch {}
 
-  // Extract first JSON object found
   const match = stripped.match(/\{[\s\S]*\}/)
   if (match) {
     try {
@@ -159,12 +149,15 @@ export default async function handler(req, res) {
   }
   lastRequestTime = now
 
-  const { category, context } = req.body || {}
-
   try {
     console.log('[generate-topic-cards] Starting generation...')
 
-    const response = await callAnthropicWithRetry(category, context)
+    const dynamicContext = await buildPromptContext()
+    const systemPrompt = dynamicContext
+      ? `${BASE_SYSTEM_PROMPT}\n\n${dynamicContext}`
+      : BASE_SYSTEM_PROMPT
+
+    const response = await callAnthropicWithRetry(systemPrompt)
     const rawText  = response.content[0]?.text || ''
 
     console.log('[generate-topic-cards] Raw text first 300 chars:', rawText.slice(0, 300))

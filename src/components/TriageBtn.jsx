@@ -1,10 +1,9 @@
 import { OHM } from '../tokens'
 
 const KIND_STYLES = {
-  full: { bg: OHM.primary,  fg: '#fff',      bd: OHM.primary  },
-  supp: { bg: OHM.paper,    fg: OHM.blueInk, bd: OHM.blueLine },
-  mon:  { bg: OHM.paper,    fg: OHM.muted,   bd: OHM.line     },
-  excl: { bg: OHM.paper,    fg: OHM.roseInk, bd: OHM.roseLine },
+  full: { bg: OHM.primary, fg: '#fff',      bd: OHM.primary  },
+  soft: { bg: OHM.paper,   fg: OHM.blueInk, bd: OHM.blueLine },
+  excl: { bg: OHM.paper,   fg: OHM.roseInk, bd: OHM.roseLine },
 }
 
 export default function TriageBtn({ children, kind, onClick, disabled }) {

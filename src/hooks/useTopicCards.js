@@ -18,7 +18,7 @@ const loadLatest = useCallback(async () => {
     setLoading(false)
   }, [])
 
-  const regenerate = useCallback(async ({ category, context } = {}) => {
+  const regenerate = useCallback(async () => {
     setLoading(true)
     setError(null)
     setLastToast(null)
@@ -26,7 +26,7 @@ const loadLatest = useCallback(async () => {
       const res  = await fetch('/api/generate-topic-cards', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ category, context }),
+        body:    JSON.stringify({}),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || `Server error ${res.status}`)

@@ -26,13 +26,12 @@ export const FEED_STATUSES = {
 }
 
 // ─── Tier model ───────────────────────────────────────────────────────────────
-// Tier 1 = Draft (full piece), Tier 2 = Support, Tier 3 = Monitor, null = Exclude
+// Tier 1 = Draft (full piece), Tier 2 = Soft-yes, null = Exclude
 
 export const TIER_MAP = {
-  1: { label: 'Draft',   reaction: 'draft_queued', shortLabel: '✓ Draft'    },
-  2: { label: 'Support', reaction: 'supporting',   shortLabel: '✓ Support'  },
-  3: { label: 'Monitor', reaction: 'monitor',       shortLabel: '◦ Monitor'  },
-  null: { label: 'Exclude', reaction: 'exclude',   shortLabel: '✗ Excluded' },
+  1:    { label: 'Draft',    reaction: 'draft_queued', shortLabel: '✓ Draft'    },
+  2:    { label: 'Soft-yes', reaction: 'soft_yes',     shortLabel: '✓ Soft-yes' },
+  null: { label: 'Exclude',  reaction: 'exclude',      shortLabel: '✗ Excluded' },
 }
 
 // ─── Exclude qualifier vocabulary (single-select) ────────────────────────────
@@ -45,25 +44,6 @@ export const EXCLUDE_QUALIFIERS = [
   'Too niche',
   'Not relevant to audience',
 ]
-
-// ─── Monitor reason bubbles (kept for monitor triage panel) ──────────────────
-
-export const MONITOR_BUBBLES = {
-  up: [
-    'Strong evidence base',
-    'Emerging trend',
-    'High audience relevance',
-    'Unique angle',
-    'Timely topic',
-  ],
-  down: [
-    'Already covered',
-    'Too niche',
-    'Weak evidence',
-    'Not relevant to audience',
-    'Too broad',
-  ],
-}
 
 // ─── External endpoints ───────────────────────────────────────────────────────
 
