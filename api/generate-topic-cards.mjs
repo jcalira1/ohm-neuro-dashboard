@@ -4,10 +4,10 @@ import { buildPromptContext } from './lib/buildPromptContext.mjs'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-const supabase = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-
-console.log('[generate-topic-cards] Supabase URL:', SUPABASE_URL?.replace(/^https?:\/\//, '').slice(0, 30))
+const supabase = createClient(
+  'https://opwoaznzlcfxpwtrujse.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 const RATE_LIMIT_KEY = 'generate_topic_cards'
 const RATE_LIMIT_MS  = 30_000
