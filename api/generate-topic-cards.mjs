@@ -214,10 +214,9 @@ export default async function handler(req, res) {
       feed_status:    'in_feed',
     }))
 
-    // upsert: if source_url already exists, skip that row — don't fail the batch
     const { error: insertError } = await supabase
       .from('topic_cards')
-      .upsert(rows, { onConflict: 'source_url', ignoreDuplicates: true })
+      .insert(rows)
 
     if (insertError) {
       console.error('[generate-topic-cards] Supabase insert error:', insertError)
