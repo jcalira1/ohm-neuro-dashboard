@@ -1,7 +1,7 @@
 # Ohm Neuro — Sprint Roadmap
 
-Full 10-goal roadmap. Goals 1–4 from the v2 refactor are reflected here
-with updated context. See OHM_NEURO_V2_REFACTOR.md for the completed
+Goals 1–5 complete. New Goals 5A and 5B inserted after successful first
+live generation run (2026-05-03). See OHM_NEURO_V2_REFACTOR.md for
 implementation detail on Goals 2 and 4.
 
 ---
@@ -78,29 +78,84 @@ What shipped
 ---
 
 ## Goal 5 — Regenerate debug
-🟠 PAIRED WITH #2 — verify after Goals 1 and 2
+✅ DONE (2026-05-03)
 
-Context: Regenerate was producing no new topics on click despite credits
-being live. Tightly linked to Goal 2 — rebuilding prompt architecture
-should expose the failure point. Duplicate detection is handled in Goal 2,
-not here.
+What shipped
+- Supabase-backed rate limit table (api_rate_limits) — survives Vercel cold starts
+- Row-by-row insert fallback if bulk insert fails — generated cards not lost
+- Switched upsert → insert (partial unique index on source_url incompatible with ON CONFLICT)
+- Hardcoded correct Supabase URL in API — no longer depends on VITE_SUPABASE_URL env var
+- Exposed real Supabase error code in toast for faster diagnosis
 
-Diagnostic checklist
-- Confirm API call is firing — Network tab on Regenerate click
-- Confirm Anthropic returns 200 with valid card payload — log raw response
-- Confirm schema validation isn't silently rejecting the payload
-- Confirm Supabase insert succeeds — check topic_cards for new rows after click
-- Confirm feed query (ORDER BY created_at DESC LIMIT 10) picks up new batch
-- Verify model string is current (claude-sonnet-4-6)
+---
 
-Rate-limit fix
-- Move rate-limiting off in-memory lastRequestTime — Vercel cold starts wipe it
-- Replace with Supabase table api_rate_limits tracking last_called_at
-- Distinguish our 429 from Anthropic's 429 in the error toast
+## Goal 5A — Card reader metadata completeness
+🔴 NEXT — cards are live, editors need to verify content before triaging
+
+Context: The expanded card view currently shows only title and brief.
+Editors have no way to verify the research is legitimate before triaging
+(no source link, incomplete "About this piece", no study-type signal).
+This is a trust and usability gap that blocks real editorial use.
+
+Reader view — add or complete
+- Source link: clickable URL to the original article/paper for verification.
+  Model currently returns source_url: null — update prompt to request a real
+  DOI or journal URL, and surface it in the reader as "View source ↗"
+- Sources list: already stored in DB as sources[] array (journal, author, year)
+  — render it properly in the reader instead of leaving it blank
+- Study type badge: surface from the sources[].type field (peer-reviewed /
+  preprint / meta-analysis / RCT) as a small label next to the category chip
+- Key claims: already stored as claims[] in DB — render as a bullet list in
+  the reader under the brief, replacing the empty "About this piece" section
+- Signal summary: already stored in DB as signal_summary — show it as the
+  editorial rationale line ("Why this matters for Ohm Neuro")
+- Category chip: display in reader header (already on feed card, missing in reader)
+- Prompt version + batch date: small footer meta line for internal traceability
+
+Prompt update (paired)
+- Add instruction to return a real source_url (DOI or journal page) on each card
+- If no verifiable URL exists, return null — do not hallucinate URLs
+- Tighten sources[].type enum: peer-reviewed | preprint | meta-analysis | RCT | review
 
 Done when
-- Cold start → Regenerate works first try
-- Regenerate twice → no overlap in titles across batches
+- Open any card → see source link, claims list, study type, signal summary
+- Source link is real and opens the correct paper/article
+- "About this piece" section is fully populated, not blank
+
+---
+
+## Goal 5B — Category taxonomy expansion
+🟠 AFTER 5A — affects both prompt and UI category colours
+
+Context: Current category list in BASE_SYSTEM_PROMPT is too coarse (6 buckets).
+Editors and downstream content planning need finer-grained signal. Expand to
+a richer controlled vocabulary that maps to real editorial verticals.
+
+Prompt update (api/generate-topic-cards.mjs)
+- Replace the current 6-category list with the expanded taxonomy below
+- Model must return exactly one category string per card from this list
+- Add the list to BASE_SYSTEM_PROMPT and to the USER_PROMPT schema comment
+
+Expanded category list (controlled vocabulary)
+Clinical & Psychiatric | Intervention & Neuromodulation |
+Lifestyle, Systems & Optimization | Psychedelics & Novel Therapeutics |
+Emerging & Frontier | Cognitive Performance | Attention & Modern Brain |
+Longevity & Brain Ageing | Mental Resilience | Neurotechnology |
+Neurorehabilitation | AI & Machine Learning | Behavioral Intervention |
+Behavioral Psychology | Biological Pathways | Brain-Computer Interfaces |
+Cognitive Assessment | Cognitive Reserve | Decision Making |
+Dementia Prevention | Diagnostics | Mental Health & Well-Being | Nutrition |
+Preventive Medicine | Public Policy | Stress & Autonomic Nervous System |
+Wearables & Digital Biomarkers | Dementia | Rehabilitation | Neuroplasticity
+
+UI update (src/tokens.js — CAT_STYLE)
+- Add colour entries for each new category (can group similar ones)
+- Fall back to a neutral grey for any unrecognised category string
+
+Done when
+- Generated cards surface fine-grained categories from the expanded list
+- All categories render with a colour chip in feed and reader views
+- No "unknown category" grey chips appear for standard taxonomy entries
 
 ---
 
@@ -132,7 +187,7 @@ Done when
 ---
 
 ## Goal 7 — Pipeline View (Drafted topics live here)
-🟠 NEXT — after Goal 4
+🟠 AFTER 5A + 5B — structurally required before draft workflow is usable
 
 Context: Structurally required. Drafted topics exit the feed and live in
 the pipeline. Without this view, Drafted cards disappear and the workflow
