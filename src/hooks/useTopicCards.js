@@ -28,8 +28,9 @@ const loadLatest = useCallback(async () => {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({}),
       })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || `Server error ${res.status}`)
+      let json = {}
+      try { json = await res.json() } catch { /* non-JSON body — API not running or crashed */ }
+      if (!res.ok) throw new Error(json?.error || `Server error ${res.status} — run via vercel dev locally`)
       await loadLatest()
       setLastToast('success')
     } catch (err) {

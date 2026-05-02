@@ -8,9 +8,9 @@ drafts ship to Google Docs via Apps Script / Make webhook.
 See OHM_NEURO_V2_REFACTOR.md for the full spec and file checklist.
 
 ## Currently working on
-- [ ] Goal 1: Prompt architecture — create `api/lib/buildPromptContext.mjs`, wire into `api/generate-topic-cards.mjs`
-- [ ] Goal 2: 3-action triage — update `src/constants.js`, `src/components/TopicRow.jsx`, `src/components/TriageBtn.jsx`, `src/utils/undo.js`
-- [ ] Goal 3: Dedup at prompt level — folded into Goal 1 (handled inside buildPromptContext)
+- [x] Goal 1: Prompt architecture — create `api/lib/buildPromptContext.mjs`, wire into `api/generate-topic-cards.mjs`
+- [x] Goal 2: 3-action triage — update `src/constants.js`, `src/components/TopicRow.jsx`, `src/components/TriageBtn.jsx`, `src/utils/undo.js`
+- [x] Goal 3: Dedup at prompt level — folded into Goal 1 (handled inside buildPromptContext)
 
 ## Stack
 - React 19, no TypeScript, `.jsx` files only

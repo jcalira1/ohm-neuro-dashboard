@@ -42,7 +42,7 @@ function TopicReader({
 
   const REACTION_LABEL = {
     full: '✓ Draft queued',
-    soft: '✓ Soft-yes',
+    soft: '✓ Shortlist',
     excl: '✗ Excluded',
   }
   const statusPillText = localRxn
@@ -210,8 +210,8 @@ function TopicReader({
                   <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Not yet drafted</span>
                 )}
               </SpecsRow>
-              <SpecsRow label="Linked Soft-yes" last>
-                <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Will appear here once Soft-yes linking is live</span>
+              <SpecsRow label="Linked Shortlist" last>
+                <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Will appear here once Shortlist linking is live</span>
               </SpecsRow>
             </aside>
           </article>
@@ -248,7 +248,7 @@ function TopicReader({
                     <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.muted }}>Triage</div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
-                      <TriageBtn kind="soft" onClick={handleSoftYes}                   disabled={saving}>Soft-yes</TriageBtn>
+                      <TriageBtn kind="soft" onClick={handleSoftYes}                   disabled={saving}>Shortlist</TriageBtn>
                       <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
                     </div>
                   </>
@@ -424,7 +424,7 @@ function ExcludePanel({ onConfirm, onCancel }) {
 
 const REACTION_LABEL = {
   full: '✓ Draft',
-  soft: '✓ Soft-yes',
+  soft: '✓ Shortlist',
   excl: '✗ No',
 }
 
@@ -586,7 +586,7 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
                 !activePanel && (
                   <>
                     <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
-                    <TriageBtn kind="soft" onClick={handleSoftYes}                   disabled={saving}>Soft-yes</TriageBtn>
+                    <TriageBtn kind="soft" onClick={handleSoftYes}                   disabled={saving}>Shortlist</TriageBtn>
                     <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
                   </>
                 )

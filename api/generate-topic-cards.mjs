@@ -9,9 +9,39 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-let lastRequestTime = 0
-const RATE_LIMIT_MS = 30_000
+const RATE_LIMIT_KEY = 'generate_topic_cards'
+const RATE_LIMIT_MS  = 30_000
 const PROMPT_VERSION = 'v2.0'
+
+// ─── Rate limit (Supabase-backed — survives Vercel cold starts) ───────────────
+
+async function checkRateLimit() {
+  try {
+    const { data } = await supabase
+      .from('api_rate_limits')
+      .select('last_called_at')
+      .eq('key', RATE_LIMIT_KEY)
+      .maybeSingle()
+
+    if (data?.last_called_at) {
+      const elapsed = Date.now() - new Date(data.last_called_at).getTime()
+      if (elapsed < RATE_LIMIT_MS) {
+        return Math.ceil((RATE_LIMIT_MS - elapsed) / 1000)
+      }
+    }
+
+    await supabase
+      .from('api_rate_limits')
+      .upsert({ key: RATE_LIMIT_KEY, last_called_at: new Date().toISOString() })
+
+    return 0
+  } catch {
+    // Table missing or DB unreachable — allow the request through
+    return 0
+  }
+}
+
+// ─── Prompts ──────────────────────────────────────────────────────────────────
 
 const BASE_SYSTEM_PROMPT = `You are a neuroscience content intelligence engine for Ohm Neuro.
 Generate exactly 10 high-signal neuroscience topic cards for a content team to evaluate.
@@ -78,6 +108,8 @@ Generate exactly 10 topic cards. Return this exact JSON structure with no other 
   ]
 }`
 
+// ─── Anthropic call ───────────────────────────────────────────────────────────
+
 async function callAnthropicWithRetry(systemPrompt, retries = 2) {
   const delays = [2000, 4000]
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -90,8 +122,8 @@ async function callAnthropicWithRetry(systemPrompt, retries = 2) {
       })
       return response
     } catch (err) {
-      const isRateLimit = err?.status === 429
-      if (isRateLimit && attempt < retries) {
+      if (err?.status === 429 && attempt < retries) {
+        console.warn(`[generate-topic-cards] Anthropic rate limit — retrying in ${delays[attempt]}ms`)
         await new Promise(r => setTimeout(r, delays[attempt]))
         continue
       }
@@ -100,10 +132,10 @@ async function callAnthropicWithRetry(systemPrompt, retries = 2) {
   }
 }
 
+// ─── Parsing + validation ─────────────────────────────────────────────────────
+
 function extractJSON(rawText) {
-  try {
-    return JSON.parse(rawText.trim())
-  } catch {}
+  try { return JSON.parse(rawText.trim()) } catch {}
 
   const stripped = rawText
     .replace(/^```json\s*/i, '')
@@ -111,16 +143,10 @@ function extractJSON(rawText) {
     .replace(/\s*```$/i, '')
     .trim()
 
-  try {
-    return JSON.parse(stripped)
-  } catch {}
+  try { return JSON.parse(stripped) } catch {}
 
   const match = stripped.match(/\{[\s\S]*\}/)
-  if (match) {
-    try {
-      return JSON.parse(match[0])
-    } catch {}
-  }
+  if (match) { try { return JSON.parse(match[0]) } catch {} }
 
   return null
 }
@@ -137,17 +163,17 @@ function validateCards(cards) {
   )
 }
 
+// ─── Handler ──────────────────────────────────────────────────────────────────
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const now = Date.now()
-  if (now - lastRequestTime < RATE_LIMIT_MS) {
-    const waitSec = Math.ceil((RATE_LIMIT_MS - (now - lastRequestTime)) / 1000)
-    return res.status(429).json({ error: `Rate limited. Try again in ${waitSec}s.` })
+  const waitSec = await checkRateLimit()
+  if (waitSec > 0) {
+    return res.status(429).json({ error: `Please wait ${waitSec}s before regenerating.` })
   }
-  lastRequestTime = now
 
   try {
     console.log('[generate-topic-cards] Starting generation...')
@@ -157,22 +183,23 @@ export default async function handler(req, res) {
       ? `${BASE_SYSTEM_PROMPT}\n\n${dynamicContext}`
       : BASE_SYSTEM_PROMPT
 
+    console.log('[generate-topic-cards] Prompt assembled. Dynamic context length:', dynamicContext?.length ?? 0)
+
     const response = await callAnthropicWithRetry(systemPrompt)
     const rawText  = response.content[0]?.text || ''
 
-    console.log('[generate-topic-cards] Raw text first 300 chars:', rawText.slice(0, 300))
+    console.log('[generate-topic-cards] Raw response (first 300):', rawText.slice(0, 300))
 
     const parsed = extractJSON(rawText)
-
     if (!parsed) {
       console.error('[generate-topic-cards] JSON extraction failed. Raw:', rawText.slice(0, 500))
-      return res.status(502).json({ error: 'Model returned malformed JSON. Try again.' })
+      return res.status(502).json({ error: 'Model returned malformed JSON — try again.' })
     }
 
     const cards = parsed?.cards
     if (!validateCards(cards)) {
-      console.error('[generate-topic-cards] Schema validation failed. Cards:', JSON.stringify(cards)?.slice(0, 300))
-      return res.status(502).json({ error: 'Model response did not match expected schema.' })
+      console.error('[generate-topic-cards] Schema validation failed:', JSON.stringify(cards)?.slice(0, 300))
+      return res.status(502).json({ error: 'Model response did not match expected schema — try again.' })
     }
 
     const rows = cards.map(c => ({
@@ -184,18 +211,20 @@ export default async function handler(req, res) {
       category:       c.category,
       prompt_version: PROMPT_VERSION,
       source_url:     c.source_url || null,
+      feed_status:    'in_feed',
     }))
 
+    // upsert: if source_url already exists, skip that row — don't fail the batch
     const { error: insertError } = await supabase
       .from('topic_cards')
-      .insert(rows)
+      .upsert(rows, { onConflict: 'source_url', ignoreDuplicates: true })
 
     if (insertError) {
       console.error('[generate-topic-cards] Supabase insert error:', insertError)
       return res.status(500).json({ error: 'Failed to persist cards to database.' })
     }
 
-    console.log('[generate-topic-cards] Successfully inserted cards.')
+    console.log('[generate-topic-cards] Cards inserted successfully.')
     return res.status(200).json({ cards })
 
   } catch (err) {
