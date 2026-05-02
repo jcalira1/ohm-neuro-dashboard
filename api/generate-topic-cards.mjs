@@ -4,10 +4,10 @@ import { buildPromptContext } from './lib/buildPromptContext.mjs'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+const supabase = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+console.log('[generate-topic-cards] Supabase URL:', SUPABASE_URL?.replace(/^https?:\/\//, '').slice(0, 30))
 
 const RATE_LIMIT_KEY = 'generate_topic_cards'
 const RATE_LIMIT_MS  = 30_000
@@ -214,16 +214,29 @@ export default async function handler(req, res) {
       feed_status:    'in_feed',
     }))
 
-    const { error: insertError } = await supabase
-      .from('topic_cards')
-      .insert(rows)
+    // Try bulk insert; if it fails, fall back to row-by-row so we don't lose generated cards
+    const { error: bulkError } = await supabase.from('topic_cards').insert(rows)
 
-    if (insertError) {
-      console.error('[generate-topic-cards] Supabase insert error:', insertError)
-      return res.status(500).json({ error: 'Failed to persist cards to database.' })
+    if (bulkError) {
+      console.warn('[generate-topic-cards] Bulk insert failed, trying row-by-row:', bulkError.message)
+      const failed = []
+      for (const row of rows) {
+        const { error: rowErr } = await supabase.from('topic_cards').insert([row])
+        if (rowErr) {
+          console.error('[generate-topic-cards] Row insert failed:', rowErr.message, '|', row.title)
+          failed.push(row.title)
+        }
+      }
+      if (failed.length === rows.length) {
+        return res.status(500).json({
+          error: `DB insert failed (${bulkError.code}): ${bulkError.message}`,
+        })
+      }
+      console.log(`[generate-topic-cards] Partial success: ${rows.length - failed.length}/${rows.length} cards saved.`)
+    } else {
+      console.log('[generate-topic-cards] All cards inserted successfully.')
     }
 
-    console.log('[generate-topic-cards] Cards inserted successfully.')
     return res.status(200).json({ cards })
 
   } catch (err) {
