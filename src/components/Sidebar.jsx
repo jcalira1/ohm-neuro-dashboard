@@ -59,7 +59,15 @@ const NAV_ITEMS = [
   },
 ]
 
-export default function Sidebar({ batchId, promptVersion, activeView, onNavigate, open, onClose, isMobile }) {
+function CollapseIcon({ collapsed }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ transition: 'transform 0.2s', transform: collapsed ? 'rotate(180deg)' : 'none' }}>
+      <path d="M9 2L4 7l5 5" stroke={OHM.muted} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export default function Sidebar({ batchId, promptVersion, activeView, onNavigate, open, onClose, onToggleCollapse, collapsed, isMobile }) {
   return (
     <>
       {/* Mobile backdrop */}
@@ -75,20 +83,21 @@ export default function Sidebar({ batchId, promptVersion, activeView, onNavigate
       )}
 
       <aside style={{
-        width:        230,
-        flexShrink:   0,
-        background:   OHM.paper,
-        borderRight:  `1px solid ${OHM.line}`,
-        display:      'flex',
-        flexDirection:'column',
-        minHeight:    '100vh',
-        position:     isMobile ? 'fixed' : 'relative',
+        width:         isMobile ? 230 : (collapsed ? 0 : 230),
+        flexShrink:    0,
+        background:    OHM.paper,
+        borderRight:   collapsed && !isMobile ? 'none' : `1px solid ${OHM.line}`,
+        display:       'flex',
+        flexDirection: 'column',
+        minHeight:     '100vh',
+        position:      isMobile ? 'fixed' : 'relative',
         top: 0, left: 0,
-        height:       isMobile ? '100vh' : 'auto',
-        zIndex:       isMobile ? 50 : 'auto',
-        transform:    isMobile ? (open ? 'translateX(0)' : 'translateX(-100%)') : 'none',
-        transition:   isMobile ? 'transform 0.25s ease' : 'none',
-        overflowY:    'auto',
+        height:        isMobile ? '100vh' : 'auto',
+        zIndex:        isMobile ? 50 : 'auto',
+        transform:     isMobile ? (open ? 'translateX(0)' : 'translateX(-100%)') : 'none',
+        transition:    isMobile ? 'transform 0.25s ease' : 'width 0.22s ease',
+        overflowY:     'auto',
+        overflowX:     'hidden',
       }}>
 
         {/* Header */}
@@ -96,6 +105,7 @@ export default function Sidebar({ batchId, promptVersion, activeView, onNavigate
           padding: '24px 22px 22px',
           borderBottom: `1px solid ${OHM.lineSoft}`,
           display: 'flex', alignItems: 'center', gap: 10,
+          minWidth: 230,
         }}>
           <Logo color={OHM.primary} size={24} />
           <div style={{ flex: 1 }}>
@@ -106,16 +116,27 @@ export default function Sidebar({ batchId, promptVersion, activeView, onNavigate
               Intelligence V2
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: OHM.muted, fontSize: 18, lineHeight: 1, padding: 4 }}
-          >
-            ✕
-          </button>
+          {/* Close on mobile, collapse on desktop */}
+          {isMobile ? (
+            <button
+              onClick={onClose}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: OHM.muted, fontSize: 18, lineHeight: 1, padding: 4 }}
+            >
+              ✕
+            </button>
+          ) : (
+            <button
+              onClick={onToggleCollapse}
+              title="Collapse sidebar"
+              style={{ background: 'none', border: `1px solid ${OHM.line}`, borderRadius: 5, cursor: 'pointer', padding: '5px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <CollapseIcon collapsed={false} />
+            </button>
+          )}
         </div>
 
         {/* Nav */}
-        <nav style={{ padding: '14px 12px', flex: 1 }}>
+        <nav style={{ padding: '14px 12px', flex: 1, minWidth: 230 }}>
           {NAV_ITEMS.map(item => {
             const isActive = item.view && activeView === item.view
             const color    = isActive ? OHM.primary : OHM.muted
@@ -135,9 +156,10 @@ export default function Sidebar({ batchId, promptVersion, activeView, onNavigate
                   background:  isActive ? OHM.sage : 'transparent',
                   opacity:     item.soon ? 0.55 : 1,
                   cursor:      item.soon ? 'default' : 'pointer',
+                  whiteSpace:  'nowrap',
                 }}
               >
-                <span style={{ color, display: 'flex' }}>{item.icon(color)}</span>
+                <span style={{ color, display: 'flex', flexShrink: 0 }}>{item.icon(color)}</span>
                 <span style={{ color: isActive ? OHM.ink : OHM.muted, fontSize: 13, fontWeight: isActive ? 600 : 400, flex: 1 }}>
                   {item.label}
                 </span>
@@ -154,28 +176,27 @@ export default function Sidebar({ batchId, promptVersion, activeView, onNavigate
           <div style={{ margin: '22px 12px 10px', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.mutedLt, fontWeight: 600 }}>
             This week
           </div>
-          <div style={{ padding: '0 12px', fontSize: 12, color: OHM.muted, lineHeight: 1.6 }}>
+          <div style={{ padding: '0 12px', fontSize: 12, color: OHM.muted, lineHeight: 1.6, minWidth: 0 }}>
             {[
               ['Batch',  batchId || '—'],
-              ['Prompt', promptVersion || 'v1.1'],
-              ['Source', 'Supabase'],
+              ['Prompt', promptVersion || 'v2.0'],
+              ['Source', 'PubMed + Claude'],
             ].map(([label, value]) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>{label}</span>
-                <span style={{ color: OHM.ink, fontFeatureSettings: '"tnum"' }}>{value}</span>
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ flexShrink: 0 }}>{label}</span>
+                <span style={{ color: OHM.ink, fontFeatureSettings: '"tnum"', textAlign: 'right' }}>{value}</span>
               </div>
             ))}
           </div>
         </nav>
 
         {/* Footer status */}
-        <div style={{ padding: '14px 22px', borderTop: `1px solid ${OHM.lineSoft}`, fontSize: 11, color: OHM.mutedLt }}>
+        <div style={{ padding: '14px 22px', borderTop: `1px solid ${OHM.lineSoft}`, fontSize: 11, color: OHM.mutedLt, minWidth: 230 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: OHM.primary }} />
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: OHM.primary, flexShrink: 0 }} />
             <span>Connected · Supabase</span>
           </div>
         </div>
-
       </aside>
     </>
   )
