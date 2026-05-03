@@ -6,6 +6,7 @@ import Sidebar             from './components/Sidebar'
 import ProgressRing        from './components/ProgressRing'
 import TopicRow            from './components/TopicRow'
 import RegenerateButton    from './components/RegenerateButton'
+import GeneratingProgress  from './components/GeneratingProgress'
 import PipelineView        from './views/PipelineView'
 import PromptView          from './views/PromptView'
 
@@ -19,9 +20,10 @@ const STAT_CONFIG = topics => [
 export default function App() {
 
   const {
-    cards:    topics,
+    cards:      topics,
     loading,
-    error:    genError,
+    generating,
+    error:      genError,
     lastToast,
     loadLatest,
     regenerate,
@@ -133,8 +135,10 @@ export default function App() {
                 This week&apos;s signal.
               </h1>
               <div style={{ fontSize: 13, color: OHM.muted, marginTop: 6, maxWidth: 560, lineHeight: 1.55 }}>
-                {loading
-                  ? 'Loading topics...'
+                {generating
+                  ? 'Fetching real papers from PubMed and generating cards…'
+                  : loading
+                  ? 'Loading topics…'
                   : `${topics.length} cards loaded. Decide what becomes a draft, supporting link, or monitor.`
                 }
               </div>
@@ -215,9 +219,13 @@ export default function App() {
             ))}
           </div>
 
-          {loading && (
+          {loading && generating && (
+            <GeneratingProgress isMobile={isMobile} />
+          )}
+
+          {loading && !generating && (
             <div style={{ padding: '40px 0', color: OHM.muted, fontSize: 14 }}>
-              Loading this week&apos;s signal...
+              Loading this week&apos;s signal…
             </div>
           )}
 

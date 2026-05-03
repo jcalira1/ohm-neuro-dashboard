@@ -2,10 +2,11 @@ import { useState, useCallback } from 'react'
 import { supabase } from '../supabase'
 
 export function useTopicCards() {
-  const [cards,     setCards]     = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState(null)
-  const [lastToast, setLastToast] = useState(null)
+  const [cards,      setCards]      = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [error,      setError]      = useState(null)
+  const [lastToast,  setLastToast]  = useState(null)
 
 const loadLatest = useCallback(async () => {
     setLoading(true)
@@ -21,6 +22,7 @@ const loadLatest = useCallback(async () => {
 
   const regenerate = useCallback(async () => {
     setLoading(true)
+    setGenerating(true)
     setError(null)
     setLastToast(null)
     try {
@@ -39,8 +41,9 @@ const loadLatest = useCallback(async () => {
       setLastToast('error')
     } finally {
       setLoading(false)
+      setGenerating(false)
     }
   }, [loadLatest])
 
-  return { cards, loading, error, lastToast, loadLatest, regenerate }
+  return { cards, loading, generating, error, lastToast, loadLatest, regenerate }
 }
