@@ -65,12 +65,12 @@ const {
         isMobile={isMobile}
       />
 
-      {activeView === 'pipeline' && <PipelineView />}
+      {activeView === 'pipeline' && <PipelineView isMobile={isMobile} />}
 
       <main style={{ flex: 1, minWidth: 0, background: OHM.paper, display: activeView === 'feed' ? 'block' : 'none' }}>
 
         {/* ── Top bar ── */}
-        <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: '16px 20px', background: OHM.paper }}>
+        <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: isMobile ? '14px 16px' : '16px 20px', background: OHM.paper }}>
 
           {/* Hamburger + wordmark */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -94,7 +94,7 @@ const {
               <div style={{ fontSize: 10.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 8 }}>
                 Intelligence Feed · Week of {WEEK_LABEL.split(',')[0]}
               </div>
-              <h1 style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 36, fontWeight: 400, margin: 0, letterSpacing: -0.6, lineHeight: 1.05 }}>
+              <h1 style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: isMobile ? 26 : 36, fontWeight: 400, margin: 0, letterSpacing: -0.4, lineHeight: 1.05 }}>
                 This week&apos;s signal.
               </h1>
               <div style={{ fontSize: 13, color: OHM.muted, marginTop: 8, maxWidth: 560, lineHeight: 1.55 }}>
@@ -146,7 +146,7 @@ const {
         </div>
 
         {/* ── Feed ── */}
-        <div style={{ padding: '28px 44px 80px', maxWidth: 900 }}>
+        <div style={{ padding: `28px ${isMobile ? '16px' : '44px'} 80px`, maxWidth: 900 }}>
 
           {/* Grouping controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
@@ -204,6 +204,7 @@ const {
                   topic={topic}
                   topics={topics}
                   index={i}
+                  isMobile={isMobile}
                   readerIndex={readerIndex}
                   setReaderIndex={setReaderIndex}
                   onReact={() => setReactedCount(c => c + 1)}

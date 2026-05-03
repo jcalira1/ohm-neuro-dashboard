@@ -254,13 +254,33 @@ Done when
 
 ---
 
+## Goal 10 — Mobile interface fixes
+✅ DONE (2026-05-03)
+
+What shipped
+- Feed side padding: 44px → 16px on mobile (< 768px)
+- Top bar padding tightened on mobile; h1 "This week's signal." drops from 36px → 26px
+- TopicRow: article padding 22px/20px → 16px/12px on mobile; index number 26px → 18px; title h2 21px → 17px; index column width 36px → 24px
+- PipelineView: padding and h1 font responsive on mobile
+- RegenerateButton toast: word-break and maxWidth guard against overflow on narrow screens
+- isMobile prop threaded from App.jsx into TopicRow and PipelineView
+
+---
+
 ## Queued (after core loop ships)
 
-**11. Soft-yes → Draft linking** (renamed from Support → Draft linking)
+**11. Prompt Inspector view**
+Editors want to see what prompt is being sent to the model. Currently no UI for this.
+- Start writing assembled prompts to prompt_versions table on each generation
+- Add a read-only "Prompt" view in sidebar showing the last assembled prompt (BASE + dynamic context)
+- Show: version label, generated_at, full prompt text in a scrollable monospace block
+- No editing — read-only audit trail only
+
+**12. Soft-yes → Draft linking** (renamed from Support → Draft linking)
 After 1–2 batches live. Link related Soft-yes cards to a primary Draft.
 
-**12. Surface linked Soft-yes on Draft cards**
+**13. Surface linked Soft-yes on Draft cards**
 Show related Soft-yes topics on the Draft card in Pipeline View.
 
-**13. British news feed for Mark**
+**14. British news feed for Mark**
 Separate stream, parallel to main feed. Unrelated to v2.

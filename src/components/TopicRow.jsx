@@ -501,7 +501,7 @@ const REACTION_LABEL = {
   excl: '✗ No',
 }
 
-export default function TopicRow({ topic, topics, index, readerIndex, setReaderIndex, onReact, onUndo }) {
+export default function TopicRow({ topic, topics, index, isMobile, readerIndex, setReaderIndex, onReact, onUndo }) {
   const [reaction,    setReaction]    = useState(null)
   const [docUrl,      setDocUrl]      = useState(topic.draft_doc_url || null)
   const [activePanel, setActivePanel] = useState(null)
@@ -606,7 +606,7 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
       <style>{`.ohm-draft-link:hover { background: #c8dbbf !important; }`}</style>
 
       <article style={{
-        padding: '22px 20px', borderRadius: 8, marginBottom: 4,
+        padding: isMobile ? '16px 12px' : '22px 20px', borderRadius: 8, marginBottom: 4,
         borderTop: `1px solid ${OHM.lineSoft}`,
         opacity: done ? 0.55 : 1,
         transform: cardHover ? 'translateY(-3px)' : 'translateY(0)',
@@ -615,7 +615,7 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
         transition: 'transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, opacity 0.2s',
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
-          <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 26, color: OHM.mutedLt, width: 36, fontWeight: 400, fontFeatureSettings: '"tnum"', lineHeight: 1, flexShrink: 0 }}>
+          <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: isMobile ? 18 : 26, color: OHM.mutedLt, width: isMobile ? 24 : 36, fontWeight: 400, fontFeatureSettings: '"tnum"', lineHeight: 1, flexShrink: 0 }}>
             {String(index + 1).padStart(2, '0')}
           </div>
 
@@ -637,7 +637,7 @@ export default function TopicRow({ topic, topics, index, readerIndex, setReaderI
             </div>
 
             <h2 onClick={openReader} onMouseEnter={() => setCardHover(true)} onMouseLeave={() => setCardHover(false)}
-              style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 21, fontWeight: 400, margin: '0 0 8px 0', letterSpacing: -0.3, lineHeight: 1.25, color: cardHover ? OHM.primary : OHM.ink, cursor: 'pointer', transition: 'color 0.18s ease' }}>
+              style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: isMobile ? 17 : 21, fontWeight: 400, margin: '0 0 8px 0', letterSpacing: -0.3, lineHeight: 1.25, color: cardHover ? OHM.primary : OHM.ink, cursor: 'pointer', transition: 'color 0.18s ease' }}>
               {topic.title}
             </h2>
 

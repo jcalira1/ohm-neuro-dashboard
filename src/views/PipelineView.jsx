@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import { OHM, CAT_STYLE } from '../tokens'
 
-export default function PipelineView() {
+export default function PipelineView({ isMobile }) {
   const [cards,   setCards]   = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -24,11 +24,11 @@ export default function PipelineView() {
     <main style={{ flex: 1, minWidth: 0, background: OHM.paper }}>
 
       {/* Top bar */}
-      <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: '24px 32px 20px', background: OHM.paper }}>
+      <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: isMobile ? '16px 16px 14px' : '24px 32px 20px', background: OHM.paper }}>
         <div style={{ fontSize: 10.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 8 }}>
           Pipeline
         </div>
-        <h1 style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 32, fontWeight: 400, margin: 0, letterSpacing: -0.4, lineHeight: 1.1 }}>
+        <h1 style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: isMobile ? 24 : 32, fontWeight: 400, margin: 0, letterSpacing: -0.4, lineHeight: 1.1 }}>
           Drafted topics.
         </h1>
         <p style={{ fontSize: 13, color: OHM.muted, marginTop: 8, lineHeight: 1.55 }}>
@@ -40,7 +40,7 @@ export default function PipelineView() {
       </div>
 
       {/* Column */}
-      <div style={{ padding: '28px 32px 80px', maxWidth: 860 }}>
+      <div style={{ padding: `28px ${isMobile ? '16px' : '32px'} 80px`, maxWidth: 860 }}>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.muted }}>

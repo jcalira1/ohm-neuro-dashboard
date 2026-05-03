@@ -42,6 +42,7 @@ export default function RegenerateButton({ loading, error, lastToast, onRegenera
           border: `1px solid ${toast.type === 'success' ? OHM.sageDeep : OHM.roseLine}`,
           background: toast.type === 'success' ? OHM.sage : OHM.roseBg,
           color: toast.type === 'success' ? OHM.primary : OHM.roseInk,
+          maxWidth: '100%', wordBreak: 'break-word',
         }}>
           {toast.type === 'success' ? '✓ ' : '⚠ '}
           {toast.msg}
