@@ -81,13 +81,11 @@ function TopicReader({
       ? bubbles.join(', ') + (notes.trim() ? ' — ' + notes.trim() : '')
       : notes.trim()
     const { error } = await supabase.from('reactions').insert({
-      topic_id:       topic.id,
-      reaction:       type,
-      tier:           TIER_FROM_TYPE[type] ?? null,
-      reason:         reasonText || null,
-      prompt_version: 'v2.0',
+      topic_id: topic.id,
+      reaction: type,
+      reason:   reasonText || null,
     })
-    if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
+    if (error) { setSaveError('Failed to save — try again'); console.error('[reaction]', error); setSaving(false); return }
 
     if (type === 'draft_queued') {
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
@@ -379,11 +377,9 @@ function DraftPanel({ topic, onSent, onCancel }) {
     setSaving(true); setSaveError(null)
     const { error } = await supabase.from('reactions').insert({
       topic_id: topic.id, reaction: 'draft_queued',
-      tier: 1,
       reason: draftNotes.trim() || null,
-      prompt_version: 'v2.0',
     })
-    if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
+    if (error) { setSaveError('Failed to save — try again'); console.error('[reaction]', error); setSaving(false); return }
     await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
     onSent(); setSaving(false)
   }
@@ -393,11 +389,9 @@ function DraftPanel({ topic, onSent, onCancel }) {
     try {
       const { error: reactionError } = await supabase.from('reactions').insert({
         topic_id: topic.id, reaction: 'draft_queued',
-        tier: 1,
         reason: draftNotes.trim() || null,
-        prompt_version: 'v2.0',
       })
-      if (reactionError) { setSaveError('Failed to save reaction — try again'); setSaving(false); return }
+      if (reactionError) { setSaveError('Failed to save reaction — try again'); console.error('[reaction]', reactionError); setSaving(false); return }
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
       fireAppsScript({
         title: topic.title, brief: topic.brief || '',
@@ -551,13 +545,11 @@ export default function TopicRow({ topic, topics, index, isMobile, readerIndex, 
       ? bubbles.join(', ') + (notes.trim() ? ' — ' + notes.trim() : '')
       : notes.trim()
     const { error } = await supabase.from('reactions').insert({
-      topic_id:       topic.id,
-      reaction:       type,
-      tier:           TIER_FROM_TYPE[type] ?? null,
-      reason:         reasonText || null,
-      prompt_version: 'v2.0',
+      topic_id: topic.id,
+      reaction: type,
+      reason:   reasonText || null,
     })
-    if (error) { setSaveError('Failed to save — try again'); setSaving(false); return }
+    if (error) { setSaveError('Failed to save — try again'); console.error('[reaction]', error); setSaving(false); return }
 
     if (type === 'draft_queued') {
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
