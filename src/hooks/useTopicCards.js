@@ -12,6 +12,7 @@ const loadLatest = useCallback(async () => {
     const { data, error: fetchErr } = await supabase
       .from('topic_cards')
       .select('*')
+      .eq('feed_status', 'in_feed')
       .order('created_at', { ascending: false })
       .limit(10)
     if (!fetchErr && data) setCards(data)

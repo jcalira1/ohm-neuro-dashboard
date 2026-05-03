@@ -3,8 +3,8 @@ import { OHM } from '../tokens'
 
 const NAV_ITEMS = [
   {
+    view:  'feed',
     label: 'Intelligence Feed',
-    active: true,
     icon: c => (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path d="M1 3h12M1 7h12M1 11h8" stroke={c} strokeWidth="1.6" strokeLinecap="round" />
@@ -12,8 +12,8 @@ const NAV_ITEMS = [
     ),
   },
   {
+    view:  'pipeline',
     label: 'Pipeline',
-    soon: true,
     icon: c => (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <rect x="1" y="1" width="4" height="12" rx="1" stroke={c} strokeWidth="1.4" />
@@ -23,8 +23,9 @@ const NAV_ITEMS = [
     ),
   },
   {
+    view:  null,
     label: 'Batch View',
-    soon: true,
+    soon:  true,
     icon: c => (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <rect x="1" y="1" width="5" height="5" rx="1" stroke={c} strokeWidth="1.4" />
@@ -35,8 +36,9 @@ const NAV_ITEMS = [
     ),
   },
   {
+    view:  null,
     label: 'Topic Detail',
-    soon: true,
+    soon:  true,
     icon: c => (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path d="M3 1h6l3 3v9H3z" stroke={c} strokeWidth="1.4" strokeLinejoin="round" />
@@ -46,7 +48,7 @@ const NAV_ITEMS = [
   },
 ]
 
-export default function Sidebar({ batchId, promptVersion, open, onClose, isMobile }) {
+export default function Sidebar({ batchId, promptVersion, activeView, onNavigate, open, onClose, isMobile }) {
   return (
     <>
       {/* Mobile backdrop */}
@@ -104,10 +106,14 @@ export default function Sidebar({ batchId, promptVersion, open, onClose, isMobil
         {/* Nav */}
         <nav style={{ padding: '14px 12px', flex: 1 }}>
           {NAV_ITEMS.map(item => {
-            const color = item.active ? OHM.primary : OHM.muted
+            const isActive = item.view && activeView === item.view
+            const color    = isActive ? OHM.primary : OHM.muted
             return (
               <div
                 key={item.label}
+                onClick={() => {
+                  if (item.view) { onNavigate(item.view); if (isMobile) onClose() }
+                }}
                 style={{
                   display:     'flex',
                   alignItems:  'center',
@@ -115,13 +121,13 @@ export default function Sidebar({ batchId, promptVersion, open, onClose, isMobil
                   padding:     '9px 12px',
                   borderRadius: 6,
                   marginBottom: 2,
-                  background:  item.active ? OHM.sage : 'transparent',
+                  background:  isActive ? OHM.sage : 'transparent',
                   opacity:     item.soon ? 0.55 : 1,
                   cursor:      item.soon ? 'default' : 'pointer',
                 }}
               >
                 <span style={{ color, display: 'flex' }}>{item.icon(color)}</span>
-                <span style={{ color: item.active ? OHM.ink : OHM.muted, fontSize: 13, fontWeight: item.active ? 600 : 400, flex: 1 }}>
+                <span style={{ color: isActive ? OHM.ink : OHM.muted, fontSize: 13, fontWeight: isActive ? 600 : 400, flex: 1 }}>
                   {item.label}
                 </span>
                 {item.soon && (

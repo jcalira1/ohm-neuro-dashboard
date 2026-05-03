@@ -7,6 +7,7 @@ import Sidebar             from './components/Sidebar'
 import ProgressRing        from './components/ProgressRing'
 import TopicRow            from './components/TopicRow'
 import RegenerateButton    from './components/RegenerateButton'
+import PipelineView        from './views/PipelineView'
 
 const WEEK_LABEL = getWeekLabel()
 
@@ -28,6 +29,7 @@ const {
   } = useTopicCards()
 
   // ── All useState hooks ──
+  const [activeView,   setActiveView]   = useState('feed')
   const [reactedCount, setReactedCount] = useState(0)
   const [grouping,     setGrouping]     = useState('none')
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
@@ -55,13 +57,17 @@ const {
 
       <Sidebar
         batchId={batchId}
-        promptVersion="v1.1"
+        promptVersion="v2.0"
+        activeView={activeView}
+        onNavigate={setActiveView}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         isMobile={isMobile}
       />
 
-      <main style={{ flex: 1, minWidth: 0, background: OHM.paper }}>
+      {activeView === 'pipeline' && <PipelineView />}
+
+      <main style={{ flex: 1, minWidth: 0, background: OHM.paper, display: activeView === 'feed' ? 'block' : 'none' }}>
 
         {/* ── Top bar ── */}
         <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: '16px 20px', background: OHM.paper }}>
