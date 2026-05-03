@@ -395,11 +395,21 @@ function DraftPanel({ topic, onSent, onCancel }) {
       if (reactionError) { setSaveError(`Save failed: ${reactionError.message}`); console.error('[reaction]', reactionError); setSaving(false); return }
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
       fireAppsScript({
-        action: 'create',
-        name: topic.title, title: topic.title, brief: topic.brief || '',
-        notes: draftNotes.trim(), topic_id: topic.id,
-        status: topic.status || '', category: topic.category || '',
-        batch_id: topic.batch_id || '',
+        action:          'create',
+        name:            topic.title,
+        title:           topic.title,
+        brief:           topic.brief || '',
+        key_claims:      Array.isArray(topic.claims)
+                           ? topic.claims.map((c, i) => `${i + 1}. ${c}`).join('\n')
+                           : '',
+        signal_summary:  topic.signal_summary || '',
+        citation:        Array.isArray(topic.sources) && topic.sources[0]
+                           ? `${topic.sources[0].type ? '[' + topic.sources[0].type + '] ' : ''}${topic.sources[0].description}`
+                           : '',
+        source_url:      topic.source_url || '',
+        notes:           draftNotes.trim(),
+        topic_id:        topic.id,
+        category:        topic.category || '',
       })
       onSent()
     } catch {
