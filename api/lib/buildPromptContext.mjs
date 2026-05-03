@@ -6,20 +6,12 @@ export async function buildPromptContext() {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 
-  const [{ data: reactions }, { data: recentCards }] = await Promise.all([
-    supabase
-      .from('reactions')
-      .select('reaction, reason, topic_cards(title, category)')
-      .in('reaction', ['draft_queued', 'soft_yes', 'exclude'])
-      .order('created_at', { ascending: false })
-      .limit(60),   // was 200 — we only need recent signal, not the full history
-
-    supabase
-      .from('topic_cards')
-      .select('title')
-      .order('created_at', { ascending: false })
-      .limit(20),   // was 50 — DOI dedup handles the real duplicates now
-  ])
+  const { data: reactions } = await supabase
+    .from('reactions')
+    .select('reaction, reason, topic_cards(title, category)')
+    .in('reaction', ['draft_queued', 'soft_yes', 'exclude'])
+    .order('created_at', { ascending: false })
+    .limit(60)
 
   const tier1    = []  // draft_queued — cap at 12
   const tier2    = []  // soft_yes    — cap at 8
@@ -80,11 +72,6 @@ export async function buildPromptContext() {
     }
 
     parts.push(lines.join('\n'))
-  }
-
-  const titles = (recentCards || []).map(c => c.title).filter(Boolean)
-  if (titles.length > 0) {
-    parts.push(`## Do Not Repeat\n${titles.map(t => `- ${t}`).join('\n')}`)
   }
 
   const context = parts.join('\n\n')

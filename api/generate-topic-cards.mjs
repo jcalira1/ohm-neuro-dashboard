@@ -252,7 +252,7 @@ function extractJSON(raw) {
 }
 
 function validateCards(cards, expectedCount) {
-  if (!Array.isArray(cards) || cards.length !== expectedCount) return false
+  if (!Array.isArray(cards) || cards.length < Math.min(5, expectedCount)) return false
   return cards.every(c =>
     typeof c.title          === 'string' && c.title.trim() &&
     typeof c.brief          === 'string' && c.brief.trim() &&
@@ -328,6 +328,8 @@ export default async function handler(req, res) {
       console.error('[generate] Schema validation failed:', JSON.stringify(cards)?.slice(0, 300))
       return res.status(502).json({ error: 'Model response did not match expected schema — try again.' })
     }
+    // Trim paper list to match however many cards Claude returned (usually equal, sometimes fewer)
+    const alignedPapers = selectedPapers.slice(0, cards.length)
 
     // Always overwrite source_url with the verified PubMed DOI — never trust the model's URL
     const rows = cards.map((c, i) => ({
@@ -338,7 +340,7 @@ export default async function handler(req, res) {
       signal_summary: c.signal_summary,
       category:       c.category,
       prompt_version: PROMPT_VERSION,
-      source_url:     selectedPapers[i].source_url,
+      source_url:     alignedPapers[i].source_url,
       feed_status:    'in_feed',
     }))
 
