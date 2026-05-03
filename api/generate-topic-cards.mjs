@@ -200,11 +200,11 @@ async function fetchRealPapers(previousTitles = [], rankedQueries = SEARCH_QUERI
       title:      paper.title,
       abstract,
       authors:    authors || 'Unknown',
-      journal:    top.paper.source || 'Unknown Journal',
+      journal:    paper.source || 'Unknown Journal',
       year,
-      doi:        top.doi,
-      source_url: `https://doi.org/${top.doi}`,
-      pubTypes:   (top.paper.pubtype || []).join(', '),
+      doi,
+      source_url: `https://doi.org/${doi}`,
+      pubTypes:   (paper.pubtype || []).join(', '),
     })
 
     if (results.length >= 12) break
