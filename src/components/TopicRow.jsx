@@ -85,7 +85,7 @@ function TopicReader({
       reaction: type,
       reason:   reasonText || null,
     })
-    if (error) { setSaveError('Failed to save — try again'); console.error('[reaction]', error); setSaving(false); return }
+    if (error) { setSaveError(`Save failed: ${error.message}`); console.error('[reaction]', error); setSaving(false); return }
 
     if (type === 'draft_queued') {
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
@@ -379,7 +379,7 @@ function DraftPanel({ topic, onSent, onCancel }) {
       topic_id: topic.id, reaction: 'draft_queued',
       reason: draftNotes.trim() || null,
     })
-    if (error) { setSaveError('Failed to save — try again'); console.error('[reaction]', error); setSaving(false); return }
+    if (error) { setSaveError(`Save failed: ${error.message}`); console.error('[reaction]', error); setSaving(false); return }
     await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
     onSent(); setSaving(false)
   }
@@ -391,7 +391,7 @@ function DraftPanel({ topic, onSent, onCancel }) {
         topic_id: topic.id, reaction: 'draft_queued',
         reason: draftNotes.trim() || null,
       })
-      if (reactionError) { setSaveError('Failed to save reaction — try again'); console.error('[reaction]', reactionError); setSaving(false); return }
+      if (reactionError) { setSaveError(`Save failed: ${reactionError.message}`); console.error('[reaction]', reactionError); setSaving(false); return }
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
       fireAppsScript({
         title: topic.title, brief: topic.brief || '',
@@ -549,7 +549,7 @@ export default function TopicRow({ topic, topics, index, isMobile, readerIndex, 
       reaction: type,
       reason:   reasonText || null,
     })
-    if (error) { setSaveError('Failed to save — try again'); console.error('[reaction]', error); setSaving(false); return }
+    if (error) { setSaveError(`Save failed: ${error.message}`); console.error('[reaction]', error); setSaving(false); return }
 
     if (type === 'draft_queued') {
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
