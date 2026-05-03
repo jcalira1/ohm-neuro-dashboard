@@ -187,31 +187,18 @@ Done when
 ---
 
 ## Goal 7 — Pipeline View (Drafted topics live here)
-🟠 AFTER 5A + 5B — structurally required before draft workflow is usable
+✅ DONE (2026-05-03)
 
-Context: Structurally required. Drafted topics exit the feed and live in
-the pipeline. Without this view, Drafted cards disappear and the workflow
-breaks.
-
-New view: src/views/PipelineView.jsx
-- Wire to Pipeline SOON tag in Sidebar.jsx
-- Status columns: Drafted → Editing → Published
-- Simple list per column — tap to open linked Doc
-- Filter: topics.status = 'drafted' and downstream
-
-Feed filter update
-- Default feed excludes status = 'drafted'
-- Default feed includes status = 'in_feed' + Soft-yes tagged topics
-- Excluded topics never appear (enforced via status = 'excluded')
-
-Done when
-- Draft a topic → exits feed, appears in Pipeline under Drafted
-- Sidebar SOON tag replaced with active link
+What shipped
+- src/views/PipelineView.jsx — loads feed_status = 'drafted', shows category, date, brief, Open Draft link
+- Feed filter fixed: useTopicCards now queries .eq('feed_status', 'in_feed') — drafted/excluded cards exit the feed
+- Sidebar Pipeline item is now a live nav link (SOON tag removed), active state synced to view
+- App.jsx routes between 'feed' and 'pipeline' via activeView state — no router dependency needed
 
 ---
 
 ## Goal 8 — Archive Draft (replaces Undo flow)
-🔧 PARTIALLY DONE — verify after Goal 4
+✅ DONE — verified 2026-05-03
 
 Context: Archive path already exists in codebase (keepNotes flow in
 undo.js, conditional "Archive Draft" label in TopicRow). Verify it
