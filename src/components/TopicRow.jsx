@@ -395,6 +395,7 @@ function DraftPanel({ topic, onSent, onCancel }) {
       if (reactionError) { setSaveError(`Save failed: ${reactionError.message}`); console.error('[reaction]', reactionError); setSaving(false); return }
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
       fireAppsScript({
+        action: 'create',
         name: topic.title, title: topic.title, brief: topic.brief || '',
         notes: draftNotes.trim(), topic_id: topic.id,
         status: topic.status || '', category: topic.category || '',
