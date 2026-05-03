@@ -80,12 +80,13 @@ function TopicReader({
     const reasonText = bubbles.length > 0
       ? bubbles.join(', ') + (notes.trim() ? ' — ' + notes.trim() : '')
       : notes.trim()
+    console.log('[reaction] topic_id:', topic.id, typeof topic.id)
     const { error } = await supabase.from('reactions').insert({
       topic_id: topic.id,
       reaction: type,
       reason:   reasonText || null,
     })
-    if (error) { setSaveError(`Save failed: ${error.message}`); console.error('[reaction]', error); setSaving(false); return }
+    if (error) { setSaveError(`id=${topic.id}: ${error.message}`); console.error('[reaction]', error); setSaving(false); return }
 
     if (type === 'draft_queued') {
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
@@ -394,7 +395,7 @@ function DraftPanel({ topic, onSent, onCancel }) {
       if (reactionError) { setSaveError(`Save failed: ${reactionError.message}`); console.error('[reaction]', reactionError); setSaving(false); return }
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
       fireAppsScript({
-        title: topic.title, brief: topic.brief || '',
+        name: topic.title, title: topic.title, brief: topic.brief || '',
         notes: draftNotes.trim(), topic_id: topic.id,
         status: topic.status || '', category: topic.category || '',
         batch_id: topic.batch_id || '',
@@ -544,12 +545,13 @@ export default function TopicRow({ topic, topics, index, isMobile, readerIndex, 
     const reasonText = bubbles.length > 0
       ? bubbles.join(', ') + (notes.trim() ? ' — ' + notes.trim() : '')
       : notes.trim()
+    console.log('[reaction] topic_id:', topic.id, typeof topic.id)
     const { error } = await supabase.from('reactions').insert({
       topic_id: topic.id,
       reaction: type,
       reason:   reasonText || null,
     })
-    if (error) { setSaveError(`Save failed: ${error.message}`); console.error('[reaction]', error); setSaving(false); return }
+    if (error) { setSaveError(`id=${topic.id}: ${error.message}`); console.error('[reaction]', error); setSaving(false); return }
 
     if (type === 'draft_queued') {
       await supabase.from('topic_cards').update({ feed_status: 'drafted' }).eq('id', topic.id)
