@@ -344,15 +344,15 @@ export default async function handler(req, res) {
 
     const { error: bulkError } = await supabase
       .from('topic_cards')
-      .upsert(rows, { onConflict: 'source_url', ignoreDuplicates: true })
+      .insert(rows)
 
     if (bulkError) {
-      console.warn('[generate] Bulk upsert failed, trying row-by-row:', bulkError.message)
+      console.warn('[generate] Bulk insert failed, trying row-by-row:', bulkError.message)
       const failed = []
       for (const row of rows) {
         const { error: rowErr } = await supabase
           .from('topic_cards')
-          .upsert([row], { onConflict: 'source_url', ignoreDuplicates: true })
+          .insert([row])
         if (rowErr) {
           console.error('[generate] Row failed:', rowErr.message, '|', row.title)
           failed.push(row.title)

@@ -2,17 +2,17 @@ import { useEffect, useState } from 'react'
 import { OHM } from '../tokens'
 
 // Approximate real timings based on the backend pipeline:
-//  0–1s   buildPromptContext (DB query)
-//  1–18s  PubMed: 15 queries × 3 API calls × 350ms each
-//  18–26s Claude: writes 10 editorial cards
-//  26–30s Supabase insert
+//  0–3s   buildPromptContext (DB query)
+//  3–50s  PubMed: 15 queries × 2 API calls × 350ms delay + HTTP round-trips
+//  50–80s Claude: writes 10 editorial cards (~20–30s)
+//  80–90s Supabase insert
 const STEPS = [
-  { label: 'Checking your triage history',         end: 1  },
-  { label: 'Querying PubMed for real papers',       end: 18 },
-  { label: 'Claude writing editorial cards',        end: 26 },
-  { label: 'Saving cards to database',              end: 32 },
+  { label: 'Checking your triage history',         end: 3  },
+  { label: 'Querying PubMed for real papers',       end: 50 },
+  { label: 'Claude writing editorial cards',        end: 80 },
+  { label: 'Saving cards to database',              end: 90 },
 ]
-const TOTAL = 32
+const TOTAL = 90
 
 export default function GeneratingProgress({ isMobile }) {
   const [elapsed, setElapsed] = useState(0)
