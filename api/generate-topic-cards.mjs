@@ -38,48 +38,85 @@ async function checkRateLimit() {
   }
 }
 
-// ─── Semantic Scholar ─────────────────────────────────────────────────────────
+// ─── PubMed ───────────────────────────────────────────────────────────────────
 
-// Diverse queries covering the editorial taxonomy
+const PUBMED_BASE = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
+
+// Diverse MeSH-friendly queries covering the editorial taxonomy
 const SEARCH_QUERIES = [
-  'depression anxiety neurobiological mechanisms treatment randomized trial',
-  'ADHD attention dysregulation brain executive function',
-  'transcranial magnetic stimulation TMS clinical depression outcomes',
-  'psilocybin MDMA psychedelic assisted therapy randomized controlled trial',
-  'sleep slow wave memory consolidation brain health',
-  'aerobic exercise hippocampus neurogenesis cognitive function',
-  'Alzheimer dementia prevention lifestyle intervention',
-  'gut microbiome brain axis depression anxiety cognition',
-  'chronic stress burnout HPA cortisol brain',
-  'EEG wearable neurofeedback cognitive performance',
-  'cognitive training working memory neuroplasticity',
-  'vagus nerve stimulation psychiatric neurological',
-  'GLP-1 receptor brain neuroprotection cognition',
-  'machine learning neuroimaging psychiatric diagnosis',
-  'mindfulness meditation prefrontal cortex brain structure',
+  'depression anxiety treatment randomized controlled trial[pt] 2020:2025[dp]',
+  'ADHD attention deficit hyperactivity disorder brain neuroscience 2020:2025[dp]',
+  'transcranial magnetic stimulation depression clinical trial 2020:2025[dp]',
+  'psilocybin psychedelic therapy randomized trial 2019:2025[dp]',
+  'sleep memory consolidation cognitive function brain 2021:2025[dp]',
+  'aerobic exercise hippocampus neurogenesis cognition 2020:2025[dp]',
+  'dementia Alzheimer prevention intervention randomized 2020:2025[dp]',
+  'gut microbiome brain axis cognition depression 2020:2025[dp]',
+  'burnout stress cortisol brain neurological 2020:2025[dp]',
+  'neurofeedback EEG cognitive performance brain 2020:2025[dp]',
+  'cognitive training working memory neuroplasticity 2021:2025[dp]',
+  'vagus nerve stimulation depression anxiety 2020:2025[dp]',
+  'GLP-1 semaglutide brain neuroprotection 2022:2025[dp]',
+  'machine learning deep learning neuroimaging psychiatric 2022:2025[dp]',
+  'mindfulness meditation prefrontal cortex brain 2021:2025[dp]',
 ]
 
-async function searchSemanticScholar(query) {
-  const fields = 'title,authors,year,journal,externalIds,abstract,citationCount,publicationTypes'
-  const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&fields=${fields}&limit=5`
+async function pubmedSearch(query) {
+  const url = `${PUBMED_BASE}/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=5&retmode=json&sort=relevance`
   try {
     const res = await fetch(url, { headers: { 'User-Agent': 'OhmNeuro/1.0' } })
     if (!res.ok) return []
     const json = await res.json()
-    return json.data || []
+    return json.esearchresult?.idlist || []
   } catch {
     return []
   }
 }
 
-function scorePaper(p) {
-  if (!p.abstract || !p.externalIds?.DOI || !p.year) return -1
+async function pubmedFetch(ids) {
+  if (!ids.length) return []
+  const url = `${PUBMED_BASE}/esummary.fcgi?db=pubmed&id=${ids.join(',')}&retmode=json`
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'OhmNeuro/1.0' } })
+    if (!res.ok) return []
+    const json = await res.json()
+    const result = json.result || {}
+    return (result.uids || []).map(uid => result[uid]).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+async function pubmedAbstract(pmid) {
+  const url = `${PUBMED_BASE}/efetch.fcgi?db=pubmed&id=${pmid}&retmode=text&rettype=abstract`
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'OhmNeuro/1.0' } })
+    if (!res.ok) return ''
+    const text = await res.text()
+    // Abstract starts after the blank line following the title block
+    const match = text.match(/\n\n([\s\S]+?)(?:\n\nPMID:|$)/)
+    return match ? match[1].replace(/\s+/g, ' ').trim().slice(0, 1000) : ''
+  } catch {
+    return ''
+  }
+}
+
+function extractDoi(paper) {
+  const doiEntry = (paper.articleids || []).find(a => a.idtype === 'doi')
+  return doiEntry?.value || null
+}
+
+function scorePubmedPaper(paper, doi) {
+  if (!doi) return -1
   let score = 0
-  if (p.year >= 2023) score += 3
-  else if (p.year >= 2021) score += 2
-  else if (p.year >= 2019) score += 1
-  score += Math.min((p.citationCount || 0) / 20, 4)
-  if (p.publicationTypes?.includes('JournalArticle')) score += 2
+  const year = parseInt((paper.pubdate || '').slice(0, 4), 10)
+  if (year >= 2023) score += 3
+  else if (year >= 2021) score += 2
+  else if (year >= 2019) score += 1
+  const types = paper.pubtype || []
+  if (types.some(t => /randomized/i.test(t))) score += 3
+  if (types.some(t => /meta.?analysis/i.test(t))) score += 2
+  if (types.some(t => /journal article/i.test(t))) score += 1
   return score
 }
 
@@ -89,35 +126,46 @@ async function fetchRealPapers(previousTitles = []) {
   const prevLower = previousTitles.map(t => t.toLowerCase())
 
   for (const query of SEARCH_QUERIES) {
-    // Gentle rate limiting — Semantic Scholar allows 100 req/5min unauthenticated
-    await new Promise(r => setTimeout(r, 250))
+    await new Promise(r => setTimeout(r, 350)) // stay well within NCBI 3 req/sec limit
 
-    const papers = await searchSemanticScholar(query)
-    const best = papers
-      .map(p => ({ ...p, _score: scorePaper(p) }))
-      .filter(p => p._score >= 0)
-      .sort((a, b) => b._score - a._score)[0]
+    const pmids = await pubmedSearch(query)
+    if (!pmids.length) continue
 
-    if (!best) continue
+    const papers = await pubmedFetch(pmids)
+    await new Promise(r => setTimeout(r, 350))
 
-    const doi = best.externalIds.DOI
-    if (seenDois.has(doi)) continue
+    // Pick the best paper from this query's results
+    const scored = papers
+      .map(p => ({ paper: p, doi: extractDoi(p), score: scorePubmedPaper(p, extractDoi(p)) }))
+      .filter(x => x.score >= 0 && !seenDois.has(x.doi))
+      .sort((a, b) => b.score - a.score)
+
+    const top = scored[0]
+    if (!top) continue
 
     // Skip if title substantially overlaps with previously surfaced topics
-    const titleLower = best.title.toLowerCase()
+    const titleLower = (top.paper.title || '').toLowerCase()
     if (prevLower.some(prev => prev.length > 20 && titleLower.includes(prev.slice(0, 20)))) continue
 
-    seenDois.add(doi)
+    // Fetch abstract (separate call)
+    await new Promise(r => setTimeout(r, 350))
+    const abstract = await pubmedAbstract(top.paper.uid)
+    if (!abstract) continue
+
+    seenDois.add(top.doi)
+    const year = (top.paper.pubdate || '').slice(0, 4)
+    const authors = (top.paper.authors || []).slice(0, 3).map(a => a.name).join(', ')
+
     results.push({
-      title:         best.title,
-      abstract:      (best.abstract || '').slice(0, 1000),
-      authors:       (best.authors || []).map(a => a.name).join(', ') || 'Unknown',
-      journal:       best.journal?.name || 'Unknown Journal',
-      year:          best.year,
-      doi,
-      source_url:    `https://doi.org/${doi}`,
-      citationCount: best.citationCount || 0,
-      pubTypes:      (best.publicationTypes || []).join(', '),
+      pmid:       top.paper.uid,
+      title:      top.paper.title,
+      abstract,
+      authors:    authors || 'Unknown',
+      journal:    top.paper.source || 'Unknown Journal',
+      year,
+      doi:        top.doi,
+      source_url: `https://doi.org/${top.doi}`,
+      pubTypes:   (top.paper.pubtype || []).join(', '),
     })
 
     if (results.length >= 12) break
