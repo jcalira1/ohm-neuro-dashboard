@@ -1,9 +1,3 @@
-// ─────────────────────────────────────────────────────────────
-// FILE: src/constants.js  (replace the existing file with this)
-// Changes: adds TIER_MAP, FEED_STATUSES, EXCLUDE_QUALIFIERS
-// Old BUBBLES for positive reactions replaced by tier model
-// ─────────────────────────────────────────────────────────────
-
 // ─── Pipeline status stages ───────────────────────────────────────────────────
 
 export const STATUSES = [

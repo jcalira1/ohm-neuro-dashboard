@@ -50,9 +50,8 @@ export default function GeneratingProgress({ isMobile }) {
       {/* Step list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 28 }}>
         {STEPS.map((step, i) => {
-          const done    = elapsed >= step.end
-          const active  = i === activeStep
-          const pending = !done && !active
+          const done   = elapsed >= step.end
+          const active = i === activeStep
 
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

@@ -12,10 +12,6 @@ import PromptView          from './views/PromptView'
 
 const WEEK_LABEL = getWeekLabel()
 
-const STAT_CONFIG = topics => [
-  ['Cards',    topics.length,                       OHM.primary],
-  ['Reviewed', 0,                                   OHM.blueInk],
-]
 
 export default function App() {
 
@@ -48,8 +44,9 @@ export default function App() {
   const batchId = topics[0]?.prompt_version || '—'
   const groups  = groupTopics(topics, grouping)
   const stats   = [
-    ...STAT_CONFIG(topics),
-    ['Remaining', topics.length - reactedCount, OHM.muted],
+    ['Cards',     topics.length,                 OHM.primary],
+    ['Reviewed',  reactedCount,                  OHM.blueInk],
+    ['Remaining', topics.length - reactedCount,  OHM.muted],
   ]
 
   return (

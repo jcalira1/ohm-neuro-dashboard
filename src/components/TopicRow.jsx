@@ -80,7 +80,6 @@ function TopicReader({
     const reasonText = bubbles.length > 0
       ? bubbles.join(', ') + (notes.trim() ? ' — ' + notes.trim() : '')
       : notes.trim()
-    console.log('[reaction] topic_id:', topic.id, typeof topic.id)
     const { error } = await supabase.from('reactions').insert({
       topic_id: topic.id,
       reaction: type,
@@ -556,7 +555,6 @@ export default function TopicRow({ topic, topics, index, isMobile, readerIndex, 
     const reasonText = bubbles.length > 0
       ? bubbles.join(', ') + (notes.trim() ? ' — ' + notes.trim() : '')
       : notes.trim()
-    console.log('[reaction] topic_id:', topic.id, typeof topic.id)
     const { error } = await supabase.from('reactions').insert({
       topic_id: topic.id,
       reaction: type,

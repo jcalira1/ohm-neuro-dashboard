@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { OHM } from '../tokens'
 
-export default function RegenerateButton({ loading, error, lastToast, onRegenerate }) {
+export default function RegenerateButton({ loading, error, lastToast, onRegenerate, compact }) {
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
     if (lastToast === 'success') {
-      setToast({ type: 'success', msg: '10 new topic cards generated.' })
+      setToast({ type: 'success', msg: 'New cards generated.' })
     } else if (lastToast === 'error' && error) {
       setToast({ type: 'error', msg: error })
     }
@@ -15,6 +15,29 @@ export default function RegenerateButton({ loading, error, lastToast, onRegenera
       return () => clearTimeout(t)
     }
   }, [lastToast, error])
+
+  if (compact) {
+    return (
+      <button
+        onClick={onRegenerate}
+        disabled={loading}
+        title={loading ? 'Generating…' : 'Regenerate'}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 34, height: 34, borderRadius: 6,
+          border: `1px solid ${OHM.primary}`,
+          background: loading ? OHM.sage : OHM.primary,
+          color: loading ? OHM.primary : '#fff',
+          fontSize: 16, fontWeight: 600, fontFamily: 'inherit',
+          cursor: loading ? 'wait' : 'pointer',
+          opacity: loading ? 0.8 : 1,
+          flexShrink: 0,
+        }}
+      >
+        {loading ? '…' : '↻'}
+      </button>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>

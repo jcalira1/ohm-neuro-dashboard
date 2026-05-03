@@ -125,7 +125,7 @@ export default function PromptView({ isMobile }) {
 
           <div style={{ marginTop: 20, padding: '14px 16px', borderRadius: 6, background: OHM.sage, border: `1px solid ${OHM.sageDeep}` }}>
             <div style={{ fontSize: 12, color: OHM.primary, lineHeight: 1.6 }}>
-              <strong>Scoring criteria:</strong> Year ≥ 2023 (+3), ≥ 2021 (+2), ≥ 2019 (+1) · Citation count / 20 (up to +4) · Randomized trial (+3) · Meta-analysis (+2) · Journal article (+1) · Must have abstract + DOI to qualify.
+              <strong>Scoring criteria:</strong> Year ≥ 2023 (+3), ≥ 2021 (+2), ≥ 2019 (+1) · Randomized trial (+3) · Meta-analysis (+2) · Journal article (+1) · Must have abstract + DOI to qualify.
             </div>
           </div>
         </div>
