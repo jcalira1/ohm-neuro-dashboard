@@ -34,8 +34,7 @@ export function groupTopics(topics, grouping) {
 export function fireAppsScript(payload) {
   return fetch(APPS_SCRIPT_URL, {
     method:  'POST',
-    mode:    'no-cors',
-    headers: { 'Content-Type': 'text/plain' },
+    headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify(payload),
   }).catch(() => {
     // Silently ignore network errors — this is fire-and-forget
