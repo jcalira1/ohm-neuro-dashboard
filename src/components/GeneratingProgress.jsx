@@ -44,7 +44,7 @@ export default function GeneratingProgress({ isMobile }) {
         Generating this week&apos;s signal…
       </div>
       <div style={{ fontSize: 13, color: OHM.muted, marginBottom: 28, lineHeight: 1.5 }}>
-        Fetching real papers from PubMed, then asking Claude to write the editorial layer. This takes 20–30 seconds.
+        Fetching real papers from PubMed, then asking Claude to write the editorial layer. This takes 60–90 seconds.
       </div>
 
       {/* Step list */}
