@@ -21,45 +21,54 @@ export async function buildPromptContext() {
       .limit(50),
   ])
 
-  const tier1 = []  // draft_queued
-  const tier2 = []  // soft_yes / monitor
+  const tier1    = []  // draft_queued
+  const tier2    = []  // soft_yes
   const excluded = []
 
+  // Category signal — used to re-rank PubMed queries
+  const categoryBoosts  = {}  // category → positive score
+  const categoryDemotes = {}  // category → negative score
+
   for (const r of reactions || []) {
-    const title = r.topic_cards?.title
+    const title    = r.topic_cards?.title
+    const category = r.topic_cards?.category
     if (!title) continue
     const reason = r.reason || null
 
     if (r.reaction === 'draft_queued') {
       tier1.push({ title, reason })
+      if (category) categoryBoosts[category] = (categoryBoosts[category] || 0) + 2
     } else if (r.reaction === 'soft_yes') {
       tier2.push({ title, reason })
+      if (category) categoryBoosts[category] = (categoryBoosts[category] || 0) + 1
     } else if (r.reaction === 'exclude') {
       excluded.push({ title, reason })
+      if (category) categoryDemotes[category] = (categoryDemotes[category] || 0) + 1
     }
   }
 
+  // ── Claude context block ──────────────────────────────────────────────────────
   const parts = []
 
   if (tier1.length > 0 || tier2.length > 0 || excluded.length > 0) {
-    const lines = ['## Last Batch Context']
+    const lines = ['## Editorial Feedback from Previous Batches']
 
     if (tier1.length > 0) {
-      lines.push('\n**Tier 1 — Prioritise, find more like these:**')
+      lines.push('\n**Drafted (Tier 1) — Prioritise topics like these. Write with more depth:**')
       for (const { title, reason } of tier1) {
         lines.push(reason ? `- ${title} — bring more in: ${reason}` : `- ${title}`)
       }
     }
 
     if (tier2.length > 0) {
-      lines.push('\n**Tier 2 — Find related, lower priority:**')
+      lines.push('\n**Soft-yes (Tier 2) — Related topics welcome, lower priority:**')
       for (const { title } of tier2) {
         lines.push(`- ${title}`)
       }
     }
 
     if (excluded.length > 0) {
-      lines.push('\n**Excluded — Skip these papers (related areas are OK):**')
+      lines.push('\n**Excluded — Do not cover these specific topics. Related areas are OK:**')
       for (const { title, reason } of excluded) {
         lines.push(reason ? `- ${title} (reason: ${reason})` : `- ${title}`)
       }
@@ -75,5 +84,10 @@ export async function buildPromptContext() {
 
   const context = parts.join('\n\n')
   console.log('[buildPromptContext] Assembled context:\n', context.slice(0, 600))
-  return context
+
+  return {
+    context,
+    categoryBoosts,
+    categoryDemotes,
+  }
 }

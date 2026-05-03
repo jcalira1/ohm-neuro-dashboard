@@ -42,24 +42,34 @@ async function checkRateLimit() {
 
 const PUBMED_BASE = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
 
-// Diverse MeSH-friendly queries covering the editorial taxonomy
+// Each query is tagged with the editorial category it maps to.
+// Category boost/demote signals from triage reactions re-rank these at runtime.
 const SEARCH_QUERIES = [
-  'depression anxiety treatment randomized controlled trial[pt] 2020:2025[dp]',
-  'ADHD attention deficit hyperactivity disorder brain neuroscience 2020:2025[dp]',
-  'transcranial magnetic stimulation depression clinical trial 2020:2025[dp]',
-  'psilocybin psychedelic therapy randomized trial 2019:2025[dp]',
-  'sleep memory consolidation cognitive function brain 2021:2025[dp]',
-  'aerobic exercise hippocampus neurogenesis cognition 2020:2025[dp]',
-  'dementia Alzheimer prevention intervention randomized 2020:2025[dp]',
-  'gut microbiome brain axis cognition depression 2020:2025[dp]',
-  'burnout stress cortisol brain neurological 2020:2025[dp]',
-  'neurofeedback EEG cognitive performance brain 2020:2025[dp]',
-  'cognitive training working memory neuroplasticity 2021:2025[dp]',
-  'vagus nerve stimulation depression anxiety 2020:2025[dp]',
-  'GLP-1 semaglutide brain neuroprotection 2022:2025[dp]',
-  'machine learning deep learning neuroimaging psychiatric 2022:2025[dp]',
-  'mindfulness meditation prefrontal cortex brain 2021:2025[dp]',
+  { q: 'depression anxiety treatment randomized controlled trial[pt] 2020:2025[dp]',   cat: 'Clinical & Psychiatric' },
+  { q: 'ADHD attention deficit hyperactivity disorder brain neuroscience 2020:2025[dp]', cat: 'Attention & Modern Brain' },
+  { q: 'transcranial magnetic stimulation depression clinical trial 2020:2025[dp]',     cat: 'Intervention & Neuromodulation' },
+  { q: 'psilocybin psychedelic therapy randomized trial 2019:2025[dp]',                cat: 'Psychedelics & Novel Therapeutics' },
+  { q: 'sleep memory consolidation cognitive function brain 2021:2025[dp]',             cat: 'Lifestyle, Systems & Optimization' },
+  { q: 'aerobic exercise hippocampus neurogenesis cognition 2020:2025[dp]',             cat: 'Lifestyle, Systems & Optimization' },
+  { q: 'dementia Alzheimer prevention intervention randomized 2020:2025[dp]',           cat: 'Dementia Prevention' },
+  { q: 'gut microbiome brain axis cognition depression 2020:2025[dp]',                 cat: 'Biological Pathways' },
+  { q: 'burnout stress cortisol brain neurological 2020:2025[dp]',                     cat: 'Stress & Autonomic Nervous System' },
+  { q: 'neurofeedback EEG cognitive performance brain 2020:2025[dp]',                  cat: 'Neurotechnology' },
+  { q: 'cognitive training working memory neuroplasticity 2021:2025[dp]',               cat: 'Cognitive Performance' },
+  { q: 'vagus nerve stimulation depression anxiety 2020:2025[dp]',                     cat: 'Intervention & Neuromodulation' },
+  { q: 'GLP-1 semaglutide brain neuroprotection 2022:2025[dp]',                       cat: 'Emerging & Frontier' },
+  { q: 'machine learning deep learning neuroimaging psychiatric 2022:2025[dp]',         cat: 'AI & Machine Learning' },
+  { q: 'mindfulness meditation prefrontal cortex brain 2021:2025[dp]',                 cat: 'Mental Resilience' },
 ]
+
+// Re-rank queries using triage feedback: boosted categories run first,
+// demoted categories (excluded ≥ 3×) are skipped entirely.
+function rankQueries(categoryBoosts = {}, categoryDemotes = {}) {
+  return SEARCH_QUERIES
+    .filter(({ cat }) => (categoryDemotes[cat] || 0) < 3)
+    .map(q => ({ ...q, boost: categoryBoosts[q.cat] || 0 }))
+    .sort((a, b) => b.boost - a.boost)
+}
 
 async function pubmedSearch(query) {
   const url = `${PUBMED_BASE}/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=5&retmode=json&sort=relevance`
@@ -120,12 +130,12 @@ function scorePubmedPaper(paper, doi) {
   return score
 }
 
-async function fetchRealPapers(previousTitles = []) {
+async function fetchRealPapers(previousTitles = [], rankedQueries = SEARCH_QUERIES) {
   const results = []
   const seenDois = new Set()
   const prevLower = previousTitles.map(t => t.toLowerCase())
 
-  for (const query of SEARCH_QUERIES) {
+  for (const { q: query } of rankedQueries) {
     await new Promise(r => setTimeout(r, 350)) // stay well within NCBI 3 req/sec limit
 
     const pmids = await pubmedSearch(query)
@@ -177,7 +187,7 @@ async function fetchRealPapers(previousTitles = []) {
 // ─── Prompts ──────────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are a neuroscience content intelligence engine for Ohm Neuro.
-You will receive real, published research papers fetched from Semantic Scholar.
+You will receive real, published research papers fetched from PubMed (NCBI).
 Your job is to write editorial topic cards based solely on the papers provided — do NOT invent studies or URLs.
 
 ## Ohm Neuro Editorial Mission
@@ -205,13 +215,12 @@ Return ONLY valid JSON — no markdown, no preamble, no code fences.`
 function buildUserPrompt(papers, dynamicContext) {
   const paperList = papers.map((p, i) => [
     `[Paper ${i + 1}]`,
-    `Title:     ${p.title}`,
-    `Authors:   ${p.authors}`,
-    `Journal:   ${p.journal}, ${p.year}`,
-    `Citations: ${p.citationCount}`,
-    `Type:      ${p.pubTypes || 'unknown'}`,
-    `DOI:       ${p.doi}`,
-    `Abstract:  ${p.abstract}`,
+    `Title:    ${p.title}`,
+    `Authors:  ${p.authors}`,
+    `Journal:  ${p.journal}, ${p.year}`,
+    `Type:     ${p.pubTypes || 'unknown'}`,
+    `DOI:      ${p.doi}`,
+    `Abstract: ${p.abstract}`,
   ].join('\n')).join('\n\n---\n\n')
 
   return `${dynamicContext ? dynamicContext + '\n\n' : ''}Write one editorial topic card for each of the ${papers.length} papers below. The source_url for each card MUST be the exact doi.org URL shown — do not modify it.
@@ -272,7 +281,7 @@ export default async function handler(req, res) {
   if (waitSec > 0) return res.status(429).json({ error: `Please wait ${waitSec}s before regenerating.` })
 
   try {
-    console.log('[generate] Fetching real papers from Semantic Scholar...')
+    console.log('[generate] Fetching real papers from PubMed...')
 
     // Pull previous titles so we don't repeat topics
     const { data: recentCards } = await supabase
@@ -282,16 +291,19 @@ export default async function handler(req, res) {
       .limit(50)
     const previousTitles = (recentCards || []).map(c => c.title).filter(Boolean)
 
-    const papers = await fetchRealPapers(previousTitles)
-    console.log(`[generate] Got ${papers.length} real papers from Semantic Scholar`)
+    const { context: dynamicContext, categoryBoosts, categoryDemotes } = await buildPromptContext()
+    const rankedQueries = rankQueries(categoryBoosts, categoryDemotes)
+    console.log('[generate] Category boosts:', JSON.stringify(categoryBoosts))
+    console.log('[generate] Category demotes:', JSON.stringify(categoryDemotes))
+
+    const papers = await fetchRealPapers(previousTitles, rankedQueries)
+    console.log(`[generate] Got ${papers.length} real papers from PubMed`)
 
     if (papers.length < 5) {
-      return res.status(502).json({ error: 'Could not fetch enough real papers from Semantic Scholar — try again.' })
+      return res.status(502).json({ error: 'Could not fetch enough real papers from PubMed — try again.' })
     }
 
     const selectedPapers = papers.slice(0, 10)
-
-    const dynamicContext = await buildPromptContext()
     const userPrompt = buildUserPrompt(selectedPapers, dynamicContext)
 
     // Save prompt audit trail (non-blocking)
@@ -325,7 +337,7 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: 'Model response did not match expected schema — try again.' })
     }
 
-    // Always overwrite source_url with the verified Semantic Scholar DOI — never trust the model's URL
+    // Always overwrite source_url with the verified PubMed DOI — never trust the model's URL
     const rows = cards.map((c, i) => ({
       title:          c.title,
       brief:          c.brief,
