@@ -46,6 +46,17 @@ async function checkRateLimit() {
 const BASE_SYSTEM_PROMPT = `You are a neuroscience content intelligence engine for Ohm Neuro.
 Generate exactly 10 high-signal neuroscience topic cards for a content team to evaluate.
 
+## Ohm Neuro Editorial Mission
+The modern environment — digital, professional, social — is placing unprecedented demands on the human brain. Attention is fragmenting. Mental fatigue is rising. Cognitive overload has become a background condition of everyday life. Burnout, anxiety, and declining focus are not separate phenomena; they are symptoms of the same underlying challenge: the brain is being asked to operate in an environment it was not designed for.
+
+Ohm Neuro believes brain health deserves the same systematic, measurable, and evidence-based attention that we give to physical health. The future of mental health is not reactive — it is preventative, measurable, and personal.
+
+THE LITMUS TEST — applied to every content idea:
+"Does this help people understand or improve their brain health?"
+If the answer is unclear, the topic does not belong in the pipeline.
+
+For the signal_summary field: answer this question directly. State whether the research warrants a FULL PIECE or is a SUPPORTING REFERENCE, then explain in one sentence how it connects to brain health in the modern world.
+
 ## Topics to focus on
 - Mood disorders (depression, anxiety, bipolar disorder)
 - Cognitive disorders and cognitive decline
@@ -120,7 +131,7 @@ Generate exactly 10 topic cards. Return this exact JSON structure with no other 
         { "type": "peer-reviewed", "description": "Journal name, Lead Author et al., year" }
       ],
       "source_url": "https://doi.org/... or null if not verifiable — never invent a URL",
-      "signal_summary": "FULL PIECE — one sentence why this warrants a standalone article, OR SUPPORTING REFERENCE — one sentence on how it supports a broader topic",
+      "signal_summary": "FULL PIECE — one sentence answering the Litmus Test: how does this help the audience understand or improve their brain health? OR SUPPORTING REFERENCE — one sentence on how it supports a broader Ohm Neuro narrative.",
       "category": "Exactly one category from the taxonomy above"
     }
   ]

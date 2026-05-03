@@ -28,6 +28,9 @@ function TopicReader({
   const claims  = Array.isArray(topic.claims)  ? topic.claims  : []
   const sources = Array.isArray(topic.sources) ? topic.sources : []
   const studyType = sources[0]?.type || null
+  const generatedDate = topic.created_at
+    ? new Date(topic.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null
 
   const [activePanel,     setActivePanel]     = useState(null)
   const [saving,          setSaving]          = useState(false)
@@ -209,11 +212,22 @@ function TopicReader({
               </div>
             )}
 
-            {/* Signal Summary */}
+            {/* Litmus Test + Signal Summary */}
             {topic.signal_summary && (
-              <div style={{ marginTop: 32, padding: '16px 20px', borderRadius: 6, background: OHM.sage, border: `1px solid ${OHM.sageDeep}` }}>
-                <div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: OHM.sageInk, fontWeight: 700, marginBottom: 8 }}>Why this matters</div>
-                <p style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 14, color: OHM.primary, lineHeight: 1.65, margin: 0 }}>{topic.signal_summary}</p>
+              <div style={{ marginTop: 40, borderRadius: 8, border: `1px solid ${OHM.sageDeep}`, overflow: 'hidden' }}>
+                <div style={{ padding: '10px 18px', background: OHM.primary, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: OHM.sage }}>The Litmus Test</span>
+                  <span style={{ fontSize: 9, color: OHM.sageDeep }}>·</span>
+                  <span style={{ fontSize: 9, fontWeight: 400, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.sageDeep }}>Applied to every content idea</span>
+                </div>
+                <div style={{ padding: '14px 18px', background: '#EDF3E8', borderBottom: `1px solid ${OHM.sageDeep}` }}>
+                  <p style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, fontWeight: 600, color: OHM.primary, margin: 0, fontStyle: 'italic', lineHeight: 1.5 }}>
+                    "Does this help people understand or improve their brain health?"
+                  </p>
+                </div>
+                <div style={{ padding: '16px 18px', background: OHM.sage }}>
+                  <p style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 14, color: OHM.primary, lineHeight: 1.65, margin: 0 }}>{topic.signal_summary}</p>
+                </div>
               </div>
             )}
 
@@ -222,30 +236,30 @@ function TopicReader({
               <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 18 }}>About this piece</div>
 
               {sources.length > 0 && (
-                <SpecsRow label="Research">
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <SpecsRow label="Citation">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {sources.map((s, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {s.type && (
-                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 3, background: OHM.blueBg, color: OHM.blueInk, border: `1px solid ${OHM.blueLine}`, flexShrink: 0 }}>
+                          <span style={{ alignSelf: 'flex-start', fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 3, background: OHM.blueBg, color: OHM.blueInk, border: `1px solid ${OHM.blueLine}` }}>
                             {s.type}
                           </span>
                         )}
-                        <span style={{ fontSize: 13, color: OHM.ink }}>{s.description}</span>
+                        <span style={{ fontSize: 13, color: OHM.ink, lineHeight: 1.55 }}>{s.description}</span>
                       </div>
                     ))}
                   </div>
                 </SpecsRow>
               )}
 
-              <SpecsRow label="Source URL">
+              <SpecsRow label="Source">
                 {topic.source_url ? (
                   <a href={topic.source_url} target="_blank" rel="noopener noreferrer"
                     style={{ color: OHM.blueInk, fontSize: 13, fontWeight: 500, textDecoration: 'none', borderBottom: `1px solid ${OHM.blueLine}`, paddingBottom: 1 }}>
                     View source ↗
                   </a>
                 ) : (
-                  <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Verify via citation above</span>
+                  <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Search citation above to verify</span>
                 )}
               </SpecsRow>
 
@@ -260,8 +274,17 @@ function TopicReader({
                 )}
               </SpecsRow>
 
-              <SpecsRow label="Linked Shortlist" last>
+              <SpecsRow label="Linked Shortlist">
                 <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Coming in Goal 11</span>
+              </SpecsRow>
+
+              <SpecsRow label="Generated" last>
+                <span style={{ fontSize: 13, color: OHM.muted }}>
+                  {generatedDate || '—'}
+                  {topic.prompt_version && (
+                    <span style={{ marginLeft: 8, fontSize: 11, color: OHM.mutedLt }}>· prompt {topic.prompt_version}</span>
+                  )}
+                </span>
               </SpecsRow>
             </aside>
           </article>
