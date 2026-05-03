@@ -19,10 +19,43 @@ export const OHM = {
 }
 
 export const CAT_STYLE = {
+  // Original 6
   'Clinical & Psychiatric':            { bg: OHM.blueBg,  ink: OHM.blueInk,  line: OHM.blueLine  },
   'Intervention & Neuromodulation':    { bg: OHM.roseBg,  ink: OHM.roseInk,  line: OHM.roseLine  },
   'Lifestyle, Systems & Optimization': { bg: OHM.sageBg,  ink: OHM.sageInk,  line: OHM.sageLine  },
   'Psychedelics & Novel Therapeutics': { bg: OHM.lilacBg, ink: OHM.lilacInk, line: OHM.lilacLine },
   'Emerging & Frontier':               { bg: OHM.creamBg, ink: OHM.creamInk, line: OHM.creamLine },
   'Neuroscience':                      { bg: OHM.peachBg, ink: OHM.peachInk, line: OHM.peachLine },
+  // Clinical / diagnostic / dementia (blue)
+  'Diagnostics':                       { bg: OHM.blueBg,  ink: OHM.blueInk,  line: OHM.blueLine  },
+  'Dementia':                          { bg: OHM.blueBg,  ink: OHM.blueInk,  line: OHM.blueLine  },
+  'Dementia Prevention':               { bg: OHM.blueBg,  ink: OHM.blueInk,  line: OHM.blueLine  },
+  'Neurotechnology':                   { bg: OHM.blueBg,  ink: OHM.blueInk,  line: OHM.blueLine  },
+  'Wearables & Digital Biomarkers':    { bg: OHM.blueBg,  ink: OHM.blueInk,  line: OHM.blueLine  },
+  'Brain-Computer Interfaces':         { bg: OHM.blueBg,  ink: OHM.blueInk,  line: OHM.blueLine  },
+  // Intervention / rehab (rose)
+  'Neurorehabilitation':               { bg: OHM.roseBg,  ink: OHM.roseInk,  line: OHM.roseLine  },
+  'Rehabilitation':                    { bg: OHM.roseBg,  ink: OHM.roseInk,  line: OHM.roseLine  },
+  'Behavioral Intervention':           { bg: OHM.roseBg,  ink: OHM.roseInk,  line: OHM.roseLine  },
+  // Lifestyle / wellness / policy (sage)
+  'Mental Health & Well-Being':        { bg: OHM.sageBg,  ink: OHM.sageInk,  line: OHM.sageLine  },
+  'Mental Resilience':                 { bg: OHM.sageBg,  ink: OHM.sageInk,  line: OHM.sageLine  },
+  'Nutrition':                         { bg: OHM.sageBg,  ink: OHM.sageInk,  line: OHM.sageLine  },
+  'Preventive Medicine':               { bg: OHM.sageBg,  ink: OHM.sageInk,  line: OHM.sageLine  },
+  'Behavioral Psychology':             { bg: OHM.sageBg,  ink: OHM.sageInk,  line: OHM.sageLine  },
+  'Public Policy':                     { bg: OHM.sageBg,  ink: OHM.sageInk,  line: OHM.sageLine  },
+  // Psychedelics / novel / AI (lilac)
+  'AI & Machine Learning':             { bg: OHM.lilacBg, ink: OHM.lilacInk, line: OHM.lilacLine },
+  // Cognitive performance (cream)
+  'Cognitive Performance':             { bg: OHM.creamBg, ink: OHM.creamInk, line: OHM.creamLine },
+  'Cognitive Assessment':              { bg: OHM.creamBg, ink: OHM.creamInk, line: OHM.creamLine },
+  'Cognitive Reserve':                 { bg: OHM.creamBg, ink: OHM.creamInk, line: OHM.creamLine },
+  'Decision Making':                   { bg: OHM.creamBg, ink: OHM.creamInk, line: OHM.creamLine },
+  'Neuroplasticity':                   { bg: OHM.creamBg, ink: OHM.creamInk, line: OHM.creamLine },
+  'Attention & Modern Brain':          { bg: OHM.creamBg, ink: OHM.creamInk, line: OHM.creamLine },
+  // Brain / aging / biology (peach)
+  'Longevity & Brain Ageing':          { bg: OHM.peachBg, ink: OHM.peachInk, line: OHM.peachLine },
+  'Brain Ageing':                      { bg: OHM.peachBg, ink: OHM.peachInk, line: OHM.peachLine },
+  'Biological Pathways':               { bg: OHM.peachBg, ink: OHM.peachInk, line: OHM.peachLine },
+  'Stress & Autonomic Nervous System': { bg: OHM.peachBg, ink: OHM.peachInk, line: OHM.peachLine },
 }

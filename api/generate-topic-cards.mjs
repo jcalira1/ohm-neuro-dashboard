@@ -60,6 +60,22 @@ Generate exactly 10 high-signal neuroscience topic cards for a content team to e
 - Sleep and its role in cognitive health
 - Gut-brain axis and microbiome
 - Exercise and brain health
+- Wearables, digital biomarkers, and brain-computer interfaces
+- AI and machine learning applications in neuroscience
+- Stress physiology and the autonomic nervous system
+- Cognitive reserve and dementia prevention
+- Behavioral psychology and decision-making
+
+## Category Taxonomy (use exactly one per card)
+Clinical & Psychiatric | Intervention & Neuromodulation | Lifestyle, Systems & Optimization |
+Psychedelics & Novel Therapeutics | Emerging & Frontier | Neuroscience |
+Cognitive Performance | Attention & Modern Brain | Longevity & Brain Ageing |
+Mental Resilience | Neurotechnology | Neurorehabilitation | AI & Machine Learning |
+Behavioral Intervention | Behavioral Psychology | Biological Pathways |
+Brain-Computer Interfaces | Cognitive Assessment | Cognitive Reserve | Decision Making |
+Dementia Prevention | Diagnostics | Mental Health & Well-Being | Nutrition |
+Preventive Medicine | Public Policy | Stress & Autonomic Nervous System |
+Wearables & Digital Biomarkers | Dementia | Rehabilitation | Neuroplasticity
 
 ## Priority Sources
 - Nature Neuroscience, Neuron, Cell, Nature Medicine
@@ -78,11 +94,13 @@ Generate exactly 10 high-signal neuroscience topic cards for a content team to e
 - neuroprotection lifestyle
 
 ## Editorial Rules
-- Prioritize RCTs over observational studies
+- Prioritize RCTs over observational studies; label sources accurately (peer-reviewed | preprint | meta-analysis | RCT | review)
 - Deprioritize animal studies unless findings are very translational
-- Every card must reference a real or plausible recent study
-- Return ONLY valid JSON — no markdown, no preamble, no explanation.
-- Skip any topic substantively similar to those listed under Previously Surfaced.`
+- Every card must reference a real study — include the journal, lead author, and year
+- For source_url: provide a real DOI (https://doi.org/...) or journal page URL if you can verify it exists. If you cannot verify the URL, return null — do NOT invent or guess URLs
+- Return ONLY valid JSON — no markdown, no preamble, no explanation
+- Skip any topic substantively similar to those listed under Previously Surfaced
+- Spread cards across at least 6 different categories per batch`
 
 const USER_PROMPT = `Cover a diverse mix of the neuroscience categories listed above.
 
@@ -94,16 +112,16 @@ Generate exactly 10 topic cards. Return this exact JSON structure with no other 
       "title": "Concise, editorial-quality topic title",
       "brief": "2-3 sentence research brief covering the core finding and why it matters",
       "key_claims": [
-        "Specific verifiable claim 1",
+        "Specific verifiable claim with number or stat where possible",
         "Specific verifiable claim 2",
         "Specific verifiable claim 3"
       ],
       "sources": [
-        { "type": "peer-reviewed", "description": "Journal name, lead author, approximate year" }
+        { "type": "peer-reviewed", "description": "Journal name, Lead Author et al., year" }
       ],
-      "source_url": null,
-      "signal_summary": "FULL PIECE — one sentence why, OR SUPPORTING REFERENCE — one sentence",
-      "category": "One of: Clinical & Psychiatric | Intervention & Neuromodulation | Lifestyle, Systems & Optimization | Psychedelics & Novel Therapeutics | Emerging & Frontier | Neuroscience"
+      "source_url": "https://doi.org/... or null if not verifiable — never invent a URL",
+      "signal_summary": "FULL PIECE — one sentence why this warrants a standalone article, OR SUPPORTING REFERENCE — one sentence on how it supports a broader topic",
+      "category": "Exactly one category from the taxonomy above"
     }
   ]
 }`

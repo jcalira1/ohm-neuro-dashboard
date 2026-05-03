@@ -24,7 +24,10 @@ function TopicReader({
   onReact, onUndo, onClose,
   onNavigate,
 }) {
-  const cat = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
+  const cat     = CAT_STYLE[topic.category] || { bg: OHM.sageBg, ink: OHM.sageInk, line: OHM.sageLine }
+  const claims  = Array.isArray(topic.claims)  ? topic.claims  : []
+  const sources = Array.isArray(topic.sources) ? topic.sources : []
+  const studyType = sources[0]?.type || null
 
   const [activePanel,     setActivePanel]     = useState(null)
   const [saving,          setSaving]          = useState(false)
@@ -164,13 +167,16 @@ function TopicReader({
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <article style={{ maxWidth: 680, margin: '0 auto', padding: '72px 32px 80px' }}>
 
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28, flexWrap: 'wrap',
-              fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.muted,
-            }}>
+            {/* Category + study type */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 28, flexWrap: 'wrap' }}>
               {topic.category && (
-                <span style={{ color: cat.ink, padding: '4px 10px', borderRadius: 3, background: cat.bg, border: `1px solid ${cat.line}`, letterSpacing: '0.08em' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: cat.ink, padding: '4px 10px', borderRadius: 3, background: cat.bg, border: `1px solid ${cat.line}` }}>
                   {topic.category}
+                </span>
+              )}
+              {studyType && (
+                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: OHM.blueInk, padding: '4px 8px', borderRadius: 3, background: OHM.blueBg, border: `1px solid ${OHM.blueLine}` }}>
+                  {studyType}
                 </span>
               )}
             </div>
@@ -186,20 +192,63 @@ function TopicReader({
             <p style={{
               fontFamily: '"Source Serif 4", Georgia, serif',
               fontSize: 'clamp(17px, 1.6vw, 19px)', color: OHM.ink, lineHeight: 1.7, margin: 0, fontWeight: 400,
-              }}>{topic.brief || '—'}</p>
+            }}>{topic.brief || '—'}</p>
 
-            <aside style={{ marginTop: 56, padding: '24px 28px', borderRadius: 10, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
+            {/* Key Claims */}
+            {claims.length > 0 && (
+              <div style={{ marginTop: 40 }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 16 }}>Key Claims</div>
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {claims.map((claim, i) => (
+                    <li key={i} style={{ display: 'flex', gap: 12 }}>
+                      <span style={{ color: OHM.primary, fontWeight: 700, flexShrink: 0 }}>—</span>
+                      <span style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 15, color: OHM.ink, lineHeight: 1.65 }}>{claim}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Signal Summary */}
+            {topic.signal_summary && (
+              <div style={{ marginTop: 32, padding: '16px 20px', borderRadius: 6, background: OHM.sage, border: `1px solid ${OHM.sageDeep}` }}>
+                <div style={{ fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: OHM.sageInk, fontWeight: 700, marginBottom: 8 }}>Why this matters</div>
+                <p style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 14, color: OHM.primary, lineHeight: 1.65, margin: 0 }}>{topic.signal_summary}</p>
+              </div>
+            )}
+
+            {/* About this piece */}
+            <aside style={{ marginTop: 48, padding: '24px 28px', borderRadius: 10, border: `1px solid ${OHM.line}`, background: OHM.cream }}>
               <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 18 }}>About this piece</div>
-              <SpecsRow label="Source">
+
+              {sources.length > 0 && (
+                <SpecsRow label="Research">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {sources.map((s, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                        {s.type && (
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 3, background: OHM.blueBg, color: OHM.blueInk, border: `1px solid ${OHM.blueLine}`, flexShrink: 0 }}>
+                            {s.type}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 13, color: OHM.ink }}>{s.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                </SpecsRow>
+              )}
+
+              <SpecsRow label="Source URL">
                 {topic.source_url ? (
                   <a href={topic.source_url} target="_blank" rel="noopener noreferrer"
                     style={{ color: OHM.blueInk, fontSize: 13, fontWeight: 500, textDecoration: 'none', borderBottom: `1px solid ${OHM.blueLine}`, paddingBottom: 1 }}>
-                    Open source ↗
+                    View source ↗
                   </a>
                 ) : (
-                  <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>No source URL saved yet</span>
+                  <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Verify via citation above</span>
                 )}
               </SpecsRow>
+
               <SpecsRow label="Draft Document">
                 {localDocUrl ? (
                   <a href={localDocUrl} target="_blank" rel="noopener noreferrer"
@@ -210,8 +259,9 @@ function TopicReader({
                   <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Not yet drafted</span>
                 )}
               </SpecsRow>
+
               <SpecsRow label="Linked Shortlist" last>
-                <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Will appear here once Shortlist linking is live</span>
+                <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Coming in Goal 11</span>
               </SpecsRow>
             </aside>
           </article>
