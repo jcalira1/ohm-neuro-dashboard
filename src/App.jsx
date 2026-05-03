@@ -219,17 +219,17 @@ export default function App() {
             ))}
           </div>
 
-          {loading && generating && (
+          {generating && (
             <GeneratingProgress isMobile={isMobile} />
           )}
 
-          {loading && !generating && (
+          {!generating && loading && (
             <div style={{ padding: '40px 0', color: OHM.muted, fontSize: 14 }}>
               Loading this week&apos;s signal…
             </div>
           )}
 
-          {!loading && topics.length === 0 && (
+          {!generating && !loading && topics.length === 0 && (
             <div style={{ padding: isMobile ? '24px 20px' : '32px', borderRadius: 8, background: OHM.sage, border: `1px solid ${OHM.sageDeep}` }}>
               <p style={{ color: OHM.primary, fontSize: 14, margin: 0 }}>
                 No cards yet — click <strong>↻ Regenerate</strong> to generate this week&apos;s signal.
@@ -237,7 +237,7 @@ export default function App() {
             </div>
           )}
 
-          {!loading && groups.map(({ key, label, items }) => (
+          {!generating && !loading && groups.map(({ key, label, items }) => (
             <section key={key} style={{ marginBottom: 28 }}>
               {grouping !== 'none' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, marginTop: 16 }}>
@@ -266,7 +266,7 @@ export default function App() {
             </section>
           ))}
 
-          {!loading && topics.length > 0 && (
+          {!generating && !loading && topics.length > 0 && (
             <div style={{ textAlign: 'center', marginTop: 40, fontSize: 11, color: OHM.mutedLt, letterSpacing: '0.08em' }}>
               End of week&apos;s signal · Ohm Neuro Intelligence V2 · PubMed + Claude
             </div>
