@@ -97,17 +97,32 @@ async function pubmedFetch(ids) {
   }
 }
 
-async function pubmedAbstract(pmid) {
-  const url = `${PUBMED_BASE}/efetch.fcgi?db=pubmed&id=${pmid}&retmode=text&rettype=abstract`
+// Batch-fetch abstracts for multiple PMIDs in one API call
+async function pubmedAbstractsBatch(pmids) {
+  if (!pmids.length) return {}
+  const url = `${PUBMED_BASE}/efetch.fcgi?db=pubmed&id=${pmids.join(',')}&retmode=text&rettype=abstract`
   try {
     const res = await fetch(url, { headers: { 'User-Agent': 'OhmNeuro/1.0' } })
-    if (!res.ok) return ''
+    if (!res.ok) return {}
     const text = await res.text()
-    // Abstract starts after the blank line following the title block
-    const match = text.match(/\n\n([\s\S]+?)(?:\n\nPMID:|$)/)
-    return match ? match[1].replace(/\s+/g, ' ').trim().slice(0, 1000) : ''
+    // Each record in the text response is separated by a blank line before "PMID:"
+    // Parse each block and map PMID → abstract
+    const map = {}
+    const blocks = text.split(/\n\n(?=\d+\. )/)
+    for (const block of blocks) {
+      const pmidMatch = block.match(/PMID:\s*(\d+)/)
+      if (!pmidMatch) continue
+      const pmid = pmidMatch[1]
+      // Abstract text sits between the author block and the PMID line
+      const absMatch = block.match(/(?:METHODS?|BACKGROUND|OBJECTIVE|PURPOSE|CONCLUSIONS?|RESULTS?|ABSTRACT)[^\n]*\n([\s\S]+?)(?:\n\nPMID:|$)/i)
+        || block.match(/\n\n([\s\S]+?)(?:\n\nPMID:|$)/)
+      if (absMatch) {
+        map[pmid] = absMatch[1].replace(/\s+/g, ' ').trim().slice(0, 450)
+      }
+    }
+    return map
   } catch {
-    return ''
+    return {}
   }
 }
 
@@ -131,26 +146,28 @@ function scorePubmedPaper(paper, doi) {
 }
 
 async function fetchRealPapers(previousTitles = [], rankedQueries = SEARCH_QUERIES, usedSourceUrls = new Set()) {
-  const results = []
-  const seenDois = new Set()
-  const prevLower = previousTitles.map(t => t.toLowerCase())
+  const candidates = []
+  const seenDois   = new Set()
+  const prevLower  = previousTitles.map(t => t.toLowerCase())
 
+  // Phase 1: search + score — 2 API calls per query
   for (const { q: query } of rankedQueries) {
-    await new Promise(r => setTimeout(r, 350)) // stay well within NCBI 3 req/sec limit
+    await new Promise(r => setTimeout(r, 350))
 
     const pmids = await pubmedSearch(query)
     if (!pmids.length) continue
 
-    const papers = await pubmedFetch(pmids)
     await new Promise(r => setTimeout(r, 350))
+    const papers = await pubmedFetch(pmids)
 
-    // Pick the best paper from this query's results
     const scored = papers
       .map(p => ({ paper: p, doi: extractDoi(p), score: scorePubmedPaper(p, extractDoi(p)) }))
       .filter(x => {
         if (x.score < 0) return false
         if (seenDois.has(x.doi)) return false
         if (usedSourceUrls.has(`https://doi.org/${x.doi}`)) return false
+        const titleLower = (x.paper.title || '').toLowerCase()
+        if (prevLower.some(prev => prev.length > 20 && titleLower.includes(prev.slice(0, 20)))) return false
         return true
       })
       .sort((a, b) => b.score - a.score)
@@ -158,22 +175,29 @@ async function fetchRealPapers(previousTitles = [], rankedQueries = SEARCH_QUERI
     const top = scored[0]
     if (!top) continue
 
-    // Skip if title substantially overlaps with previously surfaced topics
-    const titleLower = (top.paper.title || '').toLowerCase()
-    if (prevLower.some(prev => prev.length > 20 && titleLower.includes(prev.slice(0, 20)))) continue
+    seenDois.add(top.doi)
+    candidates.push(top)
+    if (candidates.length >= 12) break
+  }
 
-    // Fetch abstract (separate call)
-    await new Promise(r => setTimeout(r, 350))
-    const abstract = await pubmedAbstract(top.paper.uid)
+  if (!candidates.length) return []
+
+  // Phase 2: batch-fetch all abstracts in ONE API call instead of one per paper
+  await new Promise(r => setTimeout(r, 350))
+  const pmids = candidates.map(c => c.paper.uid)
+  const abstracts = await pubmedAbstractsBatch(pmids)
+
+  const results = []
+  for (const { paper, doi } of candidates) {
+    const abstract = abstracts[paper.uid]
     if (!abstract) continue
 
-    seenDois.add(top.doi)
-    const year = (top.paper.pubdate || '').slice(0, 4)
-    const authors = (top.paper.authors || []).slice(0, 3).map(a => a.name).join(', ')
+    const year    = (paper.pubdate || '').slice(0, 4)
+    const authors = (paper.authors || []).slice(0, 2).map(a => a.name).join(', ')
 
     results.push({
-      pmid:       top.paper.uid,
-      title:      top.paper.title,
+      pmid:       paper.uid,
+      title:      paper.title,
       abstract,
       authors:    authors || 'Unknown',
       journal:    top.paper.source || 'Unknown Journal',
@@ -192,66 +216,28 @@ async function fetchRealPapers(previousTitles = [], rankedQueries = SEARCH_QUERI
 // ─── Prompts ──────────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are a neuroscience content intelligence engine for Ohm Neuro.
-You will receive real, published research papers fetched from PubMed (NCBI).
-Your job is to write editorial topic cards based solely on the papers provided — do NOT invent studies or URLs.
+Write editorial topic cards from real PubMed papers. Stay strictly within what the paper says — do not invent claims or URLs.
 
-## Ohm Neuro Editorial Mission
-The modern environment — digital, professional, social — is placing unprecedented demands on the human brain. Attention is fragmenting. Mental fatigue is rising. Cognitive overload has become a background condition of everyday life. Burnout, anxiety, and declining focus are not separate phenomena; they are symptoms of the same underlying challenge: the brain is being asked to operate in an environment it was not designed for.
+Litmus test for every card: "Does this help people understand or improve their brain health?"
 
-Ohm Neuro believes brain health deserves the same systematic, measurable, and evidence-based attention that we give to physical health. The future of mental health is not reactive — it is preventative, measurable, and personal.
+signal_summary format: start with "FULL PIECE" or "SUPPORTING REFERENCE", then one sentence on why it matters for brain health.
 
-THE LITMUS TEST — applied to every card: "Does this help people understand or improve their brain health?"
-
-For signal_summary: state whether this warrants a FULL PIECE or is a SUPPORTING REFERENCE, then explain in one sentence how it connects to brain health in the modern world.
-
-## Category Taxonomy (use exactly one per card)
-Clinical & Psychiatric | Intervention & Neuromodulation | Lifestyle, Systems & Optimization |
-Psychedelics & Novel Therapeutics | Emerging & Frontier | Neuroscience |
-Cognitive Performance | Attention & Modern Brain | Longevity & Brain Ageing |
-Mental Resilience | Neurotechnology | Neurorehabilitation | AI & Machine Learning |
-Behavioral Intervention | Behavioral Psychology | Biological Pathways |
-Brain-Computer Interfaces | Cognitive Assessment | Cognitive Reserve | Decision Making |
-Dementia Prevention | Diagnostics | Mental Health & Well-Being | Nutrition |
-Preventive Medicine | Public Policy | Stress & Autonomic Nervous System |
-Wearables & Digital Biomarkers | Dementia | Rehabilitation | Neuroplasticity
+Categories (pick exactly one):
+Clinical & Psychiatric | Intervention & Neuromodulation | Lifestyle, Systems & Optimization | Psychedelics & Novel Therapeutics | Emerging & Frontier | Neuroscience | Cognitive Performance | Attention & Modern Brain | Longevity & Brain Ageing | Mental Resilience | Neurotechnology | Neurorehabilitation | AI & Machine Learning | Behavioral Intervention | Behavioral Psychology | Biological Pathways | Brain-Computer Interfaces | Cognitive Assessment | Cognitive Reserve | Decision Making | Dementia Prevention | Diagnostics | Mental Health & Well-Being | Nutrition | Preventive Medicine | Public Policy | Stress & Autonomic Nervous System | Wearables & Digital Biomarkers | Dementia | Rehabilitation | Neuroplasticity
 
 Return ONLY valid JSON — no markdown, no preamble, no code fences.`
 
 function buildUserPrompt(papers, dynamicContext) {
-  const paperList = papers.map((p, i) => [
-    `[Paper ${i + 1}]`,
-    `Title:    ${p.title}`,
-    `Authors:  ${p.authors}`,
-    `Journal:  ${p.journal}, ${p.year}`,
-    `Type:     ${p.pubTypes || 'unknown'}`,
-    `DOI:      ${p.doi}`,
-    `Abstract: ${p.abstract}`,
-  ].join('\n')).join('\n\n---\n\n')
+  const paperList = papers.map((p, i) =>
+    `[${i + 1}] ${p.journal}, ${p.year} | ${p.pubTypes || 'journal article'}\nDOI: ${p.doi}\nTitle: ${p.title}\nAbstract: ${p.abstract}`
+  ).join('\n\n')
 
-  return `${dynamicContext ? dynamicContext + '\n\n' : ''}Write one editorial topic card for each of the ${papers.length} papers below. The source_url for each card MUST be the exact doi.org URL shown — do not modify it.
+  return `${dynamicContext ? dynamicContext + '\n\n' : ''}Write one editorial topic card per paper. Use each paper's exact DOI URL as source_url — do not modify it.
 
 ${paperList}
 
-Return this exact JSON (no markdown, no code fences):
-{
-  "cards": [
-    {
-      "title": "Concise, editorial-quality topic title — NOT the paper title, make it reader-friendly",
-      "brief": "2-3 sentence research brief covering the core finding and why it matters for brain health",
-      "key_claims": [
-        "Specific verifiable claim from the paper, include stats or numbers where available",
-        "Specific verifiable claim 2",
-        "Specific verifiable claim 3"
-      ],
-      "sources": [
-        { "type": "peer-reviewed", "description": "Journal name, Lead Author et al., year" }
-      ],
-      "source_url": "COPY THE EXACT doi.org URL FROM THE PAPER — do not change it",
-      "signal_summary": "FULL PIECE or SUPPORTING REFERENCE — one sentence on how this helps the audience understand or improve their brain health",
-      "category": "Exactly one category from the taxonomy"
-    }
-  ]
-}`
+JSON (no markdown):
+{"cards":[{"title":"reader-friendly editorial title","brief":"2-3 sentences on core finding and brain health relevance","key_claims":["stat-backed claim 1","claim 2","claim 3"],"sources":[{"type":"peer-reviewed","description":"Journal, Lead Author et al., year"}],"source_url":"https://doi.org/EXACT","signal_summary":"FULL PIECE or SUPPORTING REFERENCE — one sentence","category":"one category"}]}`
 }
 
 // ─── JSON helpers ─────────────────────────────────────────────────────────────
