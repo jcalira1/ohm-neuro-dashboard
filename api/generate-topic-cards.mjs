@@ -130,7 +130,7 @@ function scorePubmedPaper(paper, doi) {
   return score
 }
 
-async function fetchRealPapers(previousTitles = [], rankedQueries = SEARCH_QUERIES) {
+async function fetchRealPapers(previousTitles = [], rankedQueries = SEARCH_QUERIES, usedSourceUrls = new Set()) {
   const results = []
   const seenDois = new Set()
   const prevLower = previousTitles.map(t => t.toLowerCase())
@@ -147,7 +147,12 @@ async function fetchRealPapers(previousTitles = [], rankedQueries = SEARCH_QUERI
     // Pick the best paper from this query's results
     const scored = papers
       .map(p => ({ paper: p, doi: extractDoi(p), score: scorePubmedPaper(p, extractDoi(p)) }))
-      .filter(x => x.score >= 0 && !seenDois.has(x.doi))
+      .filter(x => {
+        if (x.score < 0) return false
+        if (seenDois.has(x.doi)) return false
+        if (usedSourceUrls.has(`https://doi.org/${x.doi}`)) return false
+        return true
+      })
       .sort((a, b) => b.score - a.score)
 
     const top = scored[0]
@@ -283,20 +288,21 @@ export default async function handler(req, res) {
   try {
     console.log('[generate] Fetching real papers from PubMed...')
 
-    // Pull previous titles so we don't repeat topics
+    // Pull previous titles and source_urls so we don't repeat topics or re-insert the same DOI
     const { data: recentCards } = await supabase
       .from('topic_cards')
-      .select('title')
+      .select('title, source_url')
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(100)
     const previousTitles = (recentCards || []).map(c => c.title).filter(Boolean)
+    const usedSourceUrls = new Set((recentCards || []).map(c => c.source_url).filter(Boolean))
 
     const { context: dynamicContext, categoryBoosts, categoryDemotes } = await buildPromptContext()
     const rankedQueries = rankQueries(categoryBoosts, categoryDemotes)
     console.log('[generate] Category boosts:', JSON.stringify(categoryBoosts))
     console.log('[generate] Category demotes:', JSON.stringify(categoryDemotes))
 
-    const papers = await fetchRealPapers(previousTitles, rankedQueries)
+    const papers = await fetchRealPapers(previousTitles, rankedQueries, usedSourceUrls)
     console.log(`[generate] Got ${papers.length} real papers from PubMed`)
 
     if (papers.length < 5) {
@@ -350,13 +356,17 @@ export default async function handler(req, res) {
       feed_status:    'in_feed',
     }))
 
-    const { error: bulkError } = await supabase.from('topic_cards').insert(rows)
+    const { error: bulkError } = await supabase
+      .from('topic_cards')
+      .upsert(rows, { onConflict: 'source_url', ignoreDuplicates: true })
 
     if (bulkError) {
-      console.warn('[generate] Bulk insert failed, trying row-by-row:', bulkError.message)
+      console.warn('[generate] Bulk upsert failed, trying row-by-row:', bulkError.message)
       const failed = []
       for (const row of rows) {
-        const { error: rowErr } = await supabase.from('topic_cards').insert([row])
+        const { error: rowErr } = await supabase
+          .from('topic_cards')
+          .upsert([row], { onConflict: 'source_url', ignoreDuplicates: true })
         if (rowErr) {
           console.error('[generate] Row failed:', rowErr.message, '|', row.title)
           failed.push(row.title)
