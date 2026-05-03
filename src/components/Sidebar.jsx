@@ -23,6 +23,17 @@ const NAV_ITEMS = [
     ),
   },
   {
+    view:  'prompt',
+    label: 'Prompt Inspector',
+    icon: c => (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 1h7l3 3v9H2z" stroke={c} strokeWidth="1.4" strokeLinejoin="round" />
+        <path d="M4 6h6M4 9h4" stroke={c} strokeWidth="1.2" strokeLinecap="round" />
+        <path d="M9 1v3h3" stroke={c} strokeWidth="1.2" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
     view:  null,
     label: 'Batch View',
     soon:  true,

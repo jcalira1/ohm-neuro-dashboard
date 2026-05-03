@@ -13,6 +13,7 @@ export async function buildPromptContext() {
       .in('reaction', ['draft_queued', 'soft_yes', 'exclude'])
       .order('created_at', { ascending: false })
       .limit(200),
+
     supabase
       .from('topic_cards')
       .select('title')
@@ -21,16 +22,19 @@ export async function buildPromptContext() {
   ])
 
   // Tally reactions per category
-  const excludeCount = {}
-  const draftCount = {}
+  const excludeCount  = {}
+  const draftCount    = {}
+  const monitorCount  = {}
 
   for (const r of reactions || []) {
     const cat = r.topic_cards?.category
     if (!cat) continue
     if (r.reaction === 'exclude') {
-      excludeCount[cat] = (excludeCount[cat] || 0) + 1
+      excludeCount[cat]  = (excludeCount[cat]  || 0) + 1
     } else if (r.reaction === 'draft_queued') {
-      draftCount[cat] = (draftCount[cat] || 0) + 1
+      draftCount[cat]    = (draftCount[cat]    || 0) + 1
+    } else if (r.reaction === 'soft_yes') {
+      monitorCount[cat]  = (monitorCount[cat]  || 0) + 1
     }
   }
 
@@ -40,6 +44,9 @@ export async function buildPromptContext() {
   }
   for (const [cat, n] of Object.entries(draftCount)) {
     if (n >= 3) rules.push(`Prioritize "${cat}" — editors drafted ${n} cards from this category recently.`)
+  }
+  for (const [cat, n] of Object.entries(monitorCount)) {
+    if (n >= 2) rules.push(`Surface more content from "${cat}" — editors flagged ${n} cards as worth monitoring; this signals audience interest.`)
   }
 
   const parts = []

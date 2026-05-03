@@ -214,6 +214,15 @@ export default async function handler(req, res) {
 
     console.log('[generate-topic-cards] Prompt assembled. Dynamic context length:', dynamicContext?.length ?? 0)
 
+    // Save prompt to audit trail (non-blocking — never fail the generation over this)
+    supabase.from('prompt_versions').insert({
+      version_label:  PROMPT_VERSION,
+      prompt_text:    systemPrompt,
+      change_source:  'auto',
+    }).then(({ error }) => {
+      if (error) console.warn('[generate-topic-cards] Could not save prompt version:', error.message)
+    })
+
     const response = await callAnthropicWithRetry(systemPrompt)
     const rawText  = response.content[0]?.text || ''
 

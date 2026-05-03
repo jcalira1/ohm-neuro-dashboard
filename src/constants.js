@@ -26,12 +26,12 @@ export const FEED_STATUSES = {
 }
 
 // ─── Tier model ───────────────────────────────────────────────────────────────
-// Tier 1 = Draft (full piece), Tier 2 = Shortlist, null = Exclude
+// Tier 1 = Draft (full piece), Tier 2 = Monitor (prompt feedback signal), null = Exclude
 
 export const TIER_MAP = {
-  1:    { label: 'Draft',    reaction: 'draft_queued', shortLabel: '✓ Draft'    },
-  2:    { label: 'Shortlist', reaction: 'soft_yes',     shortLabel: '✓ Shortlist' },
-  null: { label: 'Exclude',  reaction: 'exclude',      shortLabel: '✗ Excluded' },
+  1:    { label: 'Draft',   reaction: 'draft_queued', shortLabel: '✓ Draft'   },
+  2:    { label: 'Monitor', reaction: 'soft_yes',     shortLabel: '✓ Monitor' },
+  null: { label: 'Exclude', reaction: 'exclude',      shortLabel: '✗ Excluded' },
 }
 
 // ─── Exclude qualifier vocabulary (single-select) ────────────────────────────

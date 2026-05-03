@@ -8,6 +8,7 @@ import ProgressRing        from './components/ProgressRing'
 import TopicRow            from './components/TopicRow'
 import RegenerateButton    from './components/RegenerateButton'
 import PipelineView        from './views/PipelineView'
+import PromptView          from './views/PromptView'
 
 const WEEK_LABEL = getWeekLabel()
 
@@ -66,6 +67,7 @@ const {
       />
 
       {activeView === 'pipeline' && <PipelineView isMobile={isMobile} />}
+      {activeView === 'prompt'   && <PromptView   isMobile={isMobile} />}
 
       <main style={{ flex: 1, minWidth: 0, background: OHM.paper, display: activeView === 'feed' ? 'block' : 'none' }}>
 

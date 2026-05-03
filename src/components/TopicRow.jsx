@@ -48,7 +48,7 @@ function TopicReader({
 
   const REACTION_LABEL = {
     full: '✓ Draft queued',
-    soft: '✓ Shortlist',
+    soft: '✓ Monitor',
     excl: '✗ Excluded',
   }
   const statusPillText = localRxn
@@ -274,7 +274,7 @@ function TopicReader({
                 )}
               </SpecsRow>
 
-              <SpecsRow label="Linked Shortlist">
+              <SpecsRow label="Linked Monitor">
                 <span style={{ fontSize: 13, color: OHM.mutedLt, fontStyle: 'italic' }}>Coming in Goal 11</span>
               </SpecsRow>
 
@@ -321,7 +321,7 @@ function TopicReader({
                     <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: OHM.muted }}>Triage</div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
-                      <TriageBtn kind="soft" onClick={handleSoftYes}                   disabled={saving}>Shortlist</TriageBtn>
+                      <TriageBtn kind="soft" onClick={handleSoftYes}                   disabled={saving}>Monitor</TriageBtn>
                       <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
                     </div>
                   </>
@@ -497,7 +497,7 @@ function ExcludePanel({ onConfirm, onCancel }) {
 
 const REACTION_LABEL = {
   full: '✓ Draft',
-  soft: '✓ Shortlist',
+  soft: '✓ Monitor',
   excl: '✗ No',
 }
 
@@ -659,7 +659,7 @@ export default function TopicRow({ topic, topics, index, isMobile, readerIndex, 
                 !activePanel && (
                   <>
                     <TriageBtn kind="full" onClick={() => setActivePanel('draft')}   disabled={saving}>Draft</TriageBtn>
-                    <TriageBtn kind="soft" onClick={handleSoftYes}                   disabled={saving}>Shortlist</TriageBtn>
+                    <TriageBtn kind="soft" onClick={handleSoftYes}                   disabled={saving}>Monitor</TriageBtn>
                     <TriageBtn kind="excl" onClick={() => setActivePanel('exclude')} disabled={saving}>Exclude</TriageBtn>
                   </>
                 )
