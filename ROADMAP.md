@@ -1,7 +1,7 @@
 # Ohm Neuro Intelligence — Build Report
 
 **Stack:** React 19 · Vite · Supabase · Vercel · Anthropic Claude API · PubMed (NCBI) API  
-**Last updated:** 3 May 2026  
+**Last updated:** 4 May 2026  
 **Live URL:** https://cmgt.vercel.app
 
 ---
