@@ -83,8 +83,8 @@ export default function App() {
         </button>
       )}
 
-      {activeView === 'pipeline' && <PipelineView isMobile={isMobile} />}
-      {activeView === 'prompt'   && <PromptView   isMobile={isMobile} />}
+      {activeView === 'pipeline' && <PipelineView isMobile={isMobile} onOpenSidebar={() => setSidebarOpen(true)} />}
+      {activeView === 'prompt'   && <PromptView   isMobile={isMobile} onOpenSidebar={() => setSidebarOpen(true)} />}
 
       <main style={{ flex: 1, minWidth: 0, background: OHM.paper, display: activeView === 'feed' ? 'block' : 'none' }}>
 

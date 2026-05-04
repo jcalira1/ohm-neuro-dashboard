@@ -15,7 +15,7 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function PipelineView({ isMobile }) {
+export default function PipelineView({ isMobile, onOpenSidebar }) {
   const [cards,   setCards]   = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -42,9 +42,31 @@ export default function PipelineView({ isMobile }) {
       {/* ── Header ── */}
       <div style={{
         borderBottom: `1px solid ${OHM.line}`,
-        padding: isMobile ? '16px 16px 20px' : '28px 32px 24px',
+        padding: isMobile ? '12px 16px 18px' : '28px 32px 24px',
         background: OHM.paper,
       }}>
+        {/* Mobile nav row */}
+        {isMobile && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <button
+              onClick={onOpenSidebar}
+              aria-label="Open navigation"
+              style={{
+                background: 'none', border: `1px solid ${OHM.line}`, borderRadius: 6,
+                cursor: 'pointer', padding: '7px 9px',
+                display: 'flex', flexDirection: 'column', gap: 4,
+                minHeight: 36, minWidth: 36, alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              {[0, 1, 2].map(i => (
+                <span key={i} style={{ display: 'block', width: 16, height: 1.5, background: OHM.primary }} />
+              ))}
+            </button>
+            <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 14, color: OHM.muted }}>
+              OHM NEURO
+            </div>
+          </div>
+        )}
         <div style={{ fontSize: 10.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 10 }}>
           Pipeline
         </div>

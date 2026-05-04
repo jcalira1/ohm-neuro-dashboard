@@ -20,7 +20,7 @@ const PUBMED_QUERIES = [
   'mindfulness meditation prefrontal cortex brain 2021:2025[dp]',
 ]
 
-export default function PromptView({ isMobile }) {
+export default function PromptView({ isMobile, onOpenSidebar }) {
   const [prompts,  setPrompts]  = useState([])
   const [selected, setSelected] = useState(0)
   const [loading,  setLoading]  = useState(true)
@@ -47,14 +47,36 @@ export default function PromptView({ isMobile }) {
     <main style={{ flex: 1, minWidth: 0, background: OHM.paper, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
 
       {/* Top bar */}
-      <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: isMobile ? '16px 16px 14px' : '24px 32px 20px', background: OHM.paper, flexShrink: 0 }}>
+      <div style={{ borderBottom: `1px solid ${OHM.line}`, padding: isMobile ? '12px 16px 14px' : '24px 32px 20px', background: OHM.paper, flexShrink: 0 }}>
+        {/* Mobile nav row */}
+        {isMobile && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <button
+              onClick={onOpenSidebar}
+              aria-label="Open navigation"
+              style={{
+                background: 'none', border: `1px solid ${OHM.line}`, borderRadius: 6,
+                cursor: 'pointer', padding: '7px 9px',
+                display: 'flex', flexDirection: 'column', gap: 4,
+                minHeight: 36, minWidth: 36, alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              {[0, 1, 2].map(i => (
+                <span key={i} style={{ display: 'block', width: 16, height: 1.5, background: OHM.primary }} />
+              ))}
+            </button>
+            <div style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: 14, color: OHM.muted }}>
+              OHM NEURO
+            </div>
+          </div>
+        )}
         <div style={{ fontSize: 10.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: OHM.primary, fontWeight: 700, marginBottom: 8 }}>
           Prompt Inspector
         </div>
         <h1 style={{ fontFamily: '"Source Serif 4", Georgia, serif', fontSize: isMobile ? 24 : 32, fontWeight: 400, margin: 0, letterSpacing: -0.4, lineHeight: 1.1 }}>
           How cards are made.
         </h1>
-        <p style={{ fontSize: 13, color: OHM.muted, marginTop: 8, lineHeight: 1.55 }}>
+        <p style={{ fontSize: isMobile ? 12.5 : 13, color: OHM.muted, marginTop: 8, lineHeight: 1.55, maxWidth: 520, margin: '8px 0 0' }}>
           Audit trail of every generation run — PubMed queries used to source real papers, and the Claude prompt that wrote the editorial layer.
         </p>
 
@@ -68,7 +90,10 @@ export default function PromptView({ isMobile }) {
               key={t.id}
               onClick={() => setTab(t.id)}
               style={{
-                padding: '5px 14px', borderRadius: 5, fontSize: 12, fontWeight: tab === t.id ? 600 : 400,
+                padding: isMobile ? '7px 14px' : '5px 14px',
+                borderRadius: 5, fontSize: isMobile ? 13 : 12,
+                fontWeight: tab === t.id ? 600 : 400,
+                minHeight: isMobile ? 36 : 'auto',
                 border: `1px solid ${tab === t.id ? OHM.primary : OHM.line}`,
                 background: tab === t.id ? OHM.primary : OHM.paper,
                 color: tab === t.id ? '#fff' : OHM.muted,
